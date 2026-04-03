@@ -1,26 +1,202 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Brand colors */
+  --color-primary: #032e6d;
+  --color-primary-foreground: #ffffff;
+  --color-primary-50: #e8eef8;
+  --color-primary-100: #c5d5ef;
+  --color-primary-800: #062a58;
+  --color-primary-900: #021e4a;
+
+  --color-background: #f7f4eb;
+  --color-foreground: #032e6d;
+
+  --color-accent: #d0f0e8;
+  --color-accent-foreground: #032e6d;
+
+  --color-success: #28c095;
+  --color-success-foreground: #ffffff;
+  --color-success-50: #e6faf5;
+  --color-success-600: #20997a;
+  --color-success-700: #18735c;
+
+  --color-warning: #cea843;
+  --color-warning-foreground: #ffffff;
+  --color-warning-50: #fdf8e9;
+  --color-warning-700: #826927;
+
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: #e8e0cc;
+  --color-input: #e8e0cc;
+  --color-ring: #032e6d;
+
+  --color-muted: #e8e0cc;
+  --color-muted-foreground: #6b6350;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #032e6d;
+
+  --color-popover: #ffffff;
+  --color-popover-foreground: #032e6d;
+
+  --color-secondary: #f0ece0;
+  --color-secondary-foreground: #032e6d;
+
+  /* Typography */
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-mono: "DM Mono", monospace;
+
+  /* Border radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(3,46,109,0.08), 0 1px 2px rgba(3,46,109,0.04);
+  --shadow-card-hover: 0 4px 12px rgba(3,46,109,0.12), 0 2px 4px rgba(3,46,109,0.06);
+  --shadow-sidebar: 2px 0 8px rgba(3,46,109,0.15);
+  --shadow-float: 0 8px 32px rgba(3,46,109,0.2), 0 2px 8px rgba(3,46,109,0.1);
+
+  /* Animations */
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-slide-up: slideUp 0.3s ease-out;
+  --animate-shimmer: shimmer 1.5s infinite;
+  --animate-pulse-soft: pulseSoft 2s ease-in-out infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Dark mode overrides */
+.dark {
+  --color-background: #0d1b2e;
+  --color-foreground: #f7f4eb;
+  --color-primary: #1a4fa0;
+  --color-secondary: #112240;
+  --color-secondary-foreground: #f7f4eb;
+  --color-accent: #1a3d35;
+  --color-accent-foreground: #d0f0e8;
+  --color-border: #1e2d42;
+  --color-input: #1e2d42;
+  --color-ring: #1a4fa0;
+  --color-muted: #1e2d42;
+  --color-muted-foreground: #9ca3af;
+  --color-card: #112240;
+  --color-card-foreground: #f7f4eb;
+  --color-popover: #112240;
+  --color-popover-foreground: #f7f4eb;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base styles */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
 }
+
+h1, h2, h3 { font-family: var(--font-display); }
+h4, h5, h6 { font-family: var(--font-sans); font-weight: 600; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e8e0cc; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #d0c8b4; }
+.dark ::-webkit-scrollbar-thumb { background: #1e2d42; }
+
+/* Component classes */
+.card-base {
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+}
+
+.card-hover {
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s;
+}
+.card-hover:hover { box-shadow: var(--shadow-card-hover); }
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.7);
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.sidebar-link:hover { background: rgba(255,255,255,0.1); color: white; }
+.sidebar-link.active { background: rgba(255,255,255,0.15); color: white; }
+
+.alert-banner {
+  background: rgba(206,168,67,0.15);
+  border-bottom: 1px solid rgba(206,168,67,0.3);
+  padding: 0.75rem 1rem;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e8e0cc 25%, #f0ece0 50%, #e8e0cc 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #032e6d 0%, #28c095 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Keyframes */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Utility classes not in Tailwind by default */
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+.animate-pulse-soft { animation: pulseSoft 2s ease-in-out infinite; }
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
