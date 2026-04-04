@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { isPublicPath, shouldRedirectAuthenticatedUserToDashboard } from "./public-paths";
 
 describe("isPublicPath", () => {
-  it("allows marketing and legal exact paths", () => {
-    expect(isPublicPath("/")).toBe(true);
+  it("allows legal exact paths (root / redirects in-app, not public marketing)", () => {
+    expect(isPublicPath("/")).toBe(false);
     expect(isPublicPath("/terms")).toBe(true);
     expect(isPublicPath("/refund-policy")).toBe(true);
   });

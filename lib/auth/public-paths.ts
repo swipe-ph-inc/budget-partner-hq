@@ -3,7 +3,6 @@
  * Keep in sync with `proxy.ts` matcher (static assets are already excluded there).
  */
 const EXACT_PUBLIC_PATHS = new Set([
-  "/",
   "/terms",
   "/refund-policy",
   /** Next metadata routes — must be reachable without auth for crawlers */

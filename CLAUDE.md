@@ -36,7 +36,7 @@ Required in `.env.local` (see `.env.example`):
 - `app/(auth)/` — Auth flows: login, signup, forgot-password, auth/callback
 - `app/(app)/` — Signed-in app: dashboard, accounts, transactions, credit-cards, debts, savings, subscriptions, expenses, invoices, categories, profile, calendar, pricing
 
-**Public marketing & legal** (no login): `/` (landing), `/pricing`, `/terms`, `/refund-policy`, `/robots.txt`, `/sitemap.xml`, `/favicon_io/*` — allowlist in `lib/auth/public-paths.ts`, applied from `proxy.ts` via `lib/supabase/middleware.ts` (`updateSession`).
+**Public marketing & legal** (no login): `/pricing`, `/terms`, `/refund-policy`, `/robots.txt`, `/sitemap.xml`, `/favicon_io/*` — allowlist in `lib/auth/public-paths.ts`, applied from `proxy.ts` via `lib/supabase/middleware.ts` (`updateSession`). The **marketing landing page** is a separate repo: `../budget-partner-hq-landing` (sibling directory). Root `/` in this app redirects to `/login` or `/dashboard`.
 
 **Auth:** Supabase Auth (email/password + Google OAuth). Next.js 16 uses **`proxy.ts`** (not `middleware.ts`) calling `updateSession` for cookies and redirects. Server-side clients use `@supabase/ssr` cookie handling. Row Level Security (`auth.uid() = user_id`) is enforced at the DB level on every table — no client-side auth checks needed for data access.
 
