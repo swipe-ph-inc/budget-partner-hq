@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { Plus, Landmark, Wallet, CreditCard, Banknote, MoreHorizontal, Trash2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import Link from "next/link";
 import type { Database } from "@/types/database";
 import { AccountDeleteDialog } from "@/components/accounts/account-delete-dialog";
 import { Separator } from "@/components/ui/separator";
+import { currencySelectOptions } from "@/lib/currencies";
 
 type Account = Database["public"]["Tables"]["accounts"]["Row"];
 
@@ -74,7 +75,15 @@ async function applyBalanceChange(
   return { error };
 }
 
-function AccountCard({ account, onEdit }: { account: Account; onEdit: (a: Account) => void }) {
+function AccountCard({
+  account,
+  onEdit,
+  baseCurrency,
+}: {
+  account: Account;
+  onEdit: (a: Account) => void;
+  baseCurrency: string;
+}) {
   const typeInfo = ACCOUNT_TYPES.find((t) => t.value === account.type);
   const Icon = typeInfo?.icon ?? Landmark;
 
@@ -106,7 +115,7 @@ function AccountCard({ account, onEdit }: { account: Account; onEdit: (a: Accoun
 
         <div className="mt-4">
           <p className={cn("font-display text-xl font-bold", account.balance >= 0 ? "text-foreground" : "text-destructive")}>
-            {formatCurrency(account.balance, account.currency_code)}
+            {formatCurrency(account.balance, baseCurrency)}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge variant={account.type === "savings" ? "success" : account.type === "checking" ? "default" : "secondary"} className="text-xs">
@@ -143,17 +152,20 @@ function AccountForm({
   onClose,
   canAddAccount,
   accountLimit,
+  baseCurrency,
 }: {
   account?: Account;
   onSuccess: () => void;
   onClose: () => void;
   canAddAccount: boolean;
   accountLimit: number;
+  baseCurrency: string;
 }) {
   const [name, setName] = useState(account?.name ?? "");
   const [type, setType] = useState(account?.type ?? "savings");
   const [institution, setInstitution] = useState(account?.institution ?? "");
-  const [currency, setCurrency] = useState(account?.currency_code ?? "PHP");
+  const [currency, setCurrency] = useState(account?.currency_code ?? baseCurrency);
+  const currencyOptions = useMemo(() => currencySelectOptions(currency), [currency]);
   const [color, setColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
   const [notes, setNotes] = useState(account?.notes ?? "");
   const [startingBalance, setStartingBalance] = useState("");
@@ -170,6 +182,10 @@ function AccountForm({
     if (account) setBalanceInput(numericToMoneyRaw(account.balance));
     else setStartingBalance("");
   }, [account]);
+
+  useEffect(() => {
+    if (!account) setCurrency(baseCurrency);
+  }, [baseCurrency, account]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -282,8 +298,10 @@ function AccountForm({
         <Select value={currency} onValueChange={setCurrency}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {["PHP", "USD", "EUR", "GBP", "SGD", "AUD", "JPY"].map((c) => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
+            {currencyOptions.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -497,7 +515,7 @@ export function AccountsPageClient({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {group.accounts.map((account) => (
-                <AccountCard key={account.id} account={account} onEdit={openEdit} />
+                <AccountCard key={account.id} account={account} onEdit={openEdit} baseCurrency={baseCurrency} />
               ))}
             </div>
           </section>
@@ -520,6 +538,7 @@ export function AccountsPageClient({
               onClose={() => setSheetOpen(false)}
               canAddAccount={canAddAccount || !!editingAccount}
               accountLimit={accountLimit}
+              baseCurrency={baseCurrency}
             />
           </div>
         </SheetContent>

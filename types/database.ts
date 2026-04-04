@@ -23,37 +23,21 @@ export interface Database {
           plan_expires_at: string | null;
           /** When plan is pro: billing cadence; null for free or legacy Pro. */
           plan_interval: "monthly" | "annual" | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & { id: string };
-        Update: Partial<Database["public"]["Tables"]["profiles"]["Row"]>;
-      };
-      prompt_settings: {
-        Row: {
-          id: string;
-          user_id: string;
+          /** AI / prompt settings (merged from prompt_settings table) */
           system_prompt_prefix: string | null;
           ai_personality: string;
           response_language: string;
           preferred_currency_display: string;
           enable_proactive_alerts: boolean;
+          /** null = use AI_PROVIDER env */
+          ai_provider: "openrouter" | "anthropic" | null;
+          /** null = use OPEN_ROUTER_MODEL / ANTHROPIC_MODEL env */
+          ai_model: string | null;
           created_at: string;
           updated_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["prompt_settings"]["Row"]> & { user_id: string };
-        Update: Partial<Database["public"]["Tables"]["prompt_settings"]["Row"]>;
-      };
-      currencies: {
-        Row: {
-          code: string;
-          symbol: string;
-          name: string;
-          exchange_rate_to_base: number;
-          updated_at: string;
-        };
-        Insert: Omit<Database["public"]["Tables"]["currencies"]["Row"], "updated_at">;
-        Update: Partial<Database["public"]["Tables"]["currencies"]["Row"]>;
+        Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & { id: string };
+        Update: Partial<Database["public"]["Tables"]["profiles"]["Row"]>;
       };
       accounts: {
         Row: {
@@ -193,36 +177,15 @@ export interface Database {
           linked_transaction_id: string | null;
           instalment_plan_id: string | null;
           subscription_id: string | null;
+          /** Recurring expense fields (merged from expenses table) */
+          is_recurring: boolean;
+          recurrence_rule: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["transactions"]["Row"]> & {
           user_id: string; type: "income" | "expense" | "transfer" | "credit_payment" | "credit_charge"; date: string; amount: number; currency_code: string;
         };
         Update: Partial<Database["public"]["Tables"]["transactions"]["Row"]>;
-      };
-      expenses: {
-        Row: {
-          id: string;
-          user_id: string;
-          date: string;
-          amount: number;
-          currency_code: string;
-          category_id: string | null;
-          merchant_id: string | null;
-          account_id: string | null;
-          credit_card_id: string | null;
-          description: string | null;
-          receipt_url: string | null;
-          tags: string[] | null;
-          is_recurring: boolean;
-          recurrence_rule: string | null;
-          instalment_plan_id: string | null;
-          created_at: string;
-        };
-        Insert: Partial<Database["public"]["Tables"]["expenses"]["Row"]> & {
-          user_id: string; date: string; amount: number; currency_code: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["expenses"]["Row"]>;
       };
       savings_plans: {
         Row: {
@@ -342,23 +305,6 @@ export interface Database {
         };
         Insert: Partial<Database["public"]["Tables"]["debt_strategies"]["Row"]> & { user_id: string };
         Update: Partial<Database["public"]["Tables"]["debt_strategies"]["Row"]>;
-      };
-      debt_strategy_evaluations: {
-        Row: {
-          id: string;
-          user_id: string;
-          evaluated_at: string;
-          trigger: "new_debt" | "debt_paid" | "quarterly" | "buffer_change" | "manual";
-          recommended_method: string | null;
-          reasoning: string | null;
-          avalanche_payoff_date: string | null;
-          avalanche_total_interest: number | null;
-          snowball_payoff_date: string | null;
-          snowball_total_interest: number | null;
-          accepted: boolean | null;
-        };
-        Insert: Partial<Database["public"]["Tables"]["debt_strategy_evaluations"]["Row"]> & { user_id: string };
-        Update: Partial<Database["public"]["Tables"]["debt_strategy_evaluations"]["Row"]>;
       };
       invoices: {
         Row: {

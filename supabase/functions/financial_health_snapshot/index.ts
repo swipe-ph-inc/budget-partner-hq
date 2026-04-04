@@ -84,9 +84,10 @@ Deno.serve(async () => {
       let survivalCost = 15000; // default if no categories set
       if (survivalCatIds.length > 0) {
         const { data: survivalExpenses } = await supabase
-          .from("expenses")
+          .from("transactions")
           .select("amount")
           .eq("user_id", user.id)
+          .in("type", ["expense", "credit_charge"])
           .in("category_id", survivalCatIds)
           .gte("date", threeMonthsAgo);
         survivalCost = (survivalExpenses ?? []).reduce((s, e) => s + e.amount, 0) / 3;

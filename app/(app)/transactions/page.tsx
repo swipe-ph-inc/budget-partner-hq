@@ -10,7 +10,7 @@ export default async function TransactionsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("plan, plan_expires_at")
+    .select("plan, plan_expires_at, base_currency")
     .eq("id", user!.id)
     .single();
 
@@ -72,6 +72,7 @@ export default async function TransactionsPage() {
       creditCards={creditCards ?? []}
       isPro={isPro}
       freeHistoryMinDate={!isPro ? historyStart : undefined}
+      baseCurrency={profile?.base_currency ?? "PHP"}
     />
   );
 }

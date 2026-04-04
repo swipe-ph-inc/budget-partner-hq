@@ -1,19 +1,22 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { buildSystemPrompt } from "@/lib/ai/system-prompt";
-import { MCP_TOOLS } from "@/lib/mcp/tools";
-import { handleMCPTool } from "@/lib/mcp/handlers";
+import { buildSystemPrompt, interpolateSystemPrompt } from "@/lib/ai/system-prompt";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { isProSubscriber } from "@/lib/subscription-access";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+import { runAnthropicAgenticLoop } from "@/lib/ai/anthropic-chat";
+import { runOpenRouterAgenticLoop } from "@/lib/ai/openrouter-chat";
+import {
+  getOpenRouterApiKey,
+  getOpenRouterChatCompletionsUrl,
+} from "@/lib/ai/ai-provider-config";
+import { assertModelMatchesProvider, resolveUserLlm } from "@/lib/ai/resolve-user-llm";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
@@ -22,14 +25,33 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { messages: clientMessages } = body as { messages: MessageParam[] };
 
-  const [{ data: profile }, { data: promptSettings }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("base_currency, display_name, plan, plan_expires_at")
-      .eq("id", user.id)
-      .single(),
-    supabase.from("prompt_settings").select("*").eq("user_id", user.id).single(),
-  ]);
+  if (!Array.isArray(clientMessages) || clientMessages.length === 0) {
+    return new Response(JSON.stringify({ error: "Missing or empty messages." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const [{ data: profile }, { data: systemPromptRow }, { data: assistantPrimerRow }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("base_currency, display_name, plan, plan_expires_at, ai_personality, response_language, system_prompt_prefix, ai_provider, ai_model")
+        .eq("id", user.id)
+        .single(),
+      supabase
+        .from("system_prompts")
+        .select("content")
+        .eq("is_active", true)
+        .eq("name", "default")
+        .single(),
+      supabase
+        .from("system_prompts")
+        .select("content")
+        .eq("is_active", true)
+        .eq("name", "assistant_primer")
+        .single(),
+    ]);
 
   if (!isProSubscriber(profile)) {
     return new Response(
@@ -38,117 +60,168 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const systemPrompt = buildSystemPrompt({
+  let provider: ReturnType<typeof resolveUserLlm>["provider"];
+  let model: string;
+  try {
+    const resolved = resolveUserLlm(profile);
+    provider = resolved.provider;
+    model = resolved.model;
+    assertModelMatchesProvider(provider, model);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Invalid AI model configuration.";
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (provider === "openrouter") {
+    if (!getOpenRouterApiKey()) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "OpenRouter is not configured on the server. Add OPEN_ROUTER_API_KEY (or OPENROUTER_API_KEY), or choose Anthropic in AI Settings if your workspace uses direct Claude.",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  } else {
+    if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Anthropic API is not configured. Add ANTHROPIC_API_KEY, or choose OpenRouter in AI Settings.",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+
+  const promptOptions = {
     baseCurrency: profile?.base_currency ?? "PHP",
     userDisplayName: profile?.display_name ?? user.email?.split("@")[0],
-    systemPromptPrefix: promptSettings?.system_prompt_prefix ?? undefined,
-    aiPersonality: promptSettings?.ai_personality ?? "professional",
-    responseLanguage: promptSettings?.response_language ?? "en",
-  });
+    aiPersonality: profile?.ai_personality ?? "professional",
+    responseLanguage: profile?.response_language ?? "en",
+  };
 
-  // Agentic loop — keep calling Claude until no more tool calls
+  const baseSystemPrompt = systemPromptRow?.content
+    ? interpolateSystemPrompt(systemPromptRow.content, promptOptions)
+    : buildSystemPrompt(promptOptions);
+
+  const systemPrompt = `${baseSystemPrompt}
+
+Tool usage (required): For balances, transactions, accounts, credit cards, debts, invoices, savings, allocations, safe-to-spend, or any user-specific data, you MUST call the appropriate tools — never invent or estimate numbers. Prefer tools over assumptions.`;
+
+  // ── Build the message list with primer + optional user instructions ──────
+  // Level 1 (System prompt): injected via `system` param above — admin only.
+  // Level 2 (Assistant primer): simulated assistant exchange — hard guardrails.
+  // Level 3 (User prompt): user's personal instructions — lowest authority.
+
+  const primerContent = assistantPrimerRow?.content;
+  const userInstructions = profile?.system_prompt_prefix?.trim();
+
+  const primerMessages: MessageParam[] = primerContent
+    ? [
+        { role: "user", content: "Please confirm your role and operational guidelines." },
+        { role: "assistant", content: primerContent },
+      ]
+    : [];
+
+  const userInstructionMessages: MessageParam[] = userInstructions
+    ? [
+        {
+          role: "user",
+          content: `Before we start, here are my personal preferences for our conversation:\n\n${userInstructions}`,
+        },
+        {
+          role: "assistant",
+          content: "Understood. I'll keep those preferences in mind throughout our conversation.",
+        },
+      ]
+    : [];
+
+  const messagesForApi: MessageParam[] = [
+    ...primerMessages,
+    ...userInstructionMessages,
+    ...clientMessages,
+  ];
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        let currentMessages: MessageParam[] = [...clientMessages];
-        let continueLoop = true;
-
-        while (continueLoop) {
-          const response = await anthropic.messages.create({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 4096,
-            system: systemPrompt,
-            tools: MCP_TOOLS,
-            messages: currentMessages,
-            stream: false,
-          });
-
-          if (response.stop_reason === "tool_use") {
-            // Collect all text so far
-            const textContent = response.content.filter((b) => b.type === "text");
-            if (textContent.length > 0) {
-              const textBlock = textContent[0];
-              if (textBlock.type === "text") {
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: "text", text: textBlock.text })}\n\n`)
-                );
-              }
-            }
-
-            // Execute all tool calls
-            const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
-            const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
-
-            for (const block of toolUseBlocks) {
-              if (block.type !== "tool_use") continue;
-
-              // Notify client of tool activity
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    type: "tool_start",
-                    tool: block.name,
-                    tool_id: block.id,
-                  })}\n\n`
-                )
-              );
-
-              const result = await handleMCPTool(
-                block.name,
-                block.input as Record<string, unknown>,
-                user.id
-              );
-
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    type: "tool_end",
-                    tool: block.name,
-                    tool_id: block.id,
-                  })}\n\n`
-                )
-              );
-
-              toolResults.push({
-                type: "tool_result",
-                tool_use_id: block.id,
-                content: JSON.stringify(result),
-              });
-            }
-
-            // Add assistant message and tool results to continue loop
-            currentMessages = [
-              ...currentMessages,
-              { role: "assistant", content: response.content },
-              { role: "user", content: toolResults },
-            ];
-          } else {
-            // Final response — stream text
-            const finalText = response.content
-              .filter((b) => b.type === "text")
-              .map((b) => (b.type === "text" ? b.text : ""))
-              .join("");
-
+        const emit = (
+          event:
+            | { type: "text"; text: string }
+            | { type: "tool_start"; tool: string; tool_id: string }
+            | { type: "tool_end"; tool: string; tool_id: string }
+        ) => {
+          if (event.type === "text") {
             controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: "text", text: finalText })}\n\n`)
+              encoder.encode(`data: ${JSON.stringify({ type: "text", text: event.text })}\n\n`)
             );
-            continueLoop = false;
-
-            // Persist to DB
-            await supabase.from("ai_chat_messages").insert([
-              {
-                user_id: user.id,
-                role: "user",
-                content: (clientMessages[clientMessages.length - 1] as MessageParam & { content: string }).content,
-              },
-              {
-                user_id: user.id,
-                role: "assistant",
-                content: finalText,
-              },
-            ]);
+          } else if (event.type === "tool_start") {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "tool_start",
+                  tool: event.tool,
+                  tool_id: event.tool_id,
+                })}\n\n`
+              )
+            );
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "tool_end",
+                  tool: event.tool,
+                  tool_id: event.tool_id,
+                })}\n\n`
+              )
+            );
           }
+        };
+
+        let finalText = "";
+
+        if (provider === "openrouter") {
+          finalText = await runOpenRouterAgenticLoop({
+            baseUrl: getOpenRouterChatCompletionsUrl(),
+            apiKey: getOpenRouterApiKey()!,
+            model,
+            systemPrompt,
+            clientMessages: messagesForApi,
+            userId: user.id,
+            emit,
+            httpReferer: process.env.NEXT_PUBLIC_APP_URL,
+          });
+        } else {
+          const anthropic = new Anthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY!,
+          });
+          finalText = await runAnthropicAgenticLoop({
+            client: anthropic,
+            model,
+            systemPrompt,
+            clientMessages: messagesForApi,
+            userId: user.id,
+            emit,
+          });
+        }
+
+        try {
+          const lastUser = clientMessages[clientMessages.length - 1];
+          const userContent =
+            typeof lastUser?.content === "string"
+              ? lastUser.content
+              : JSON.stringify(lastUser?.content ?? "");
+          await supabase.from("ai_chat_messages").insert([
+            { user_id: user.id, role: "user", content: userContent },
+            { user_id: user.id, role: "assistant", content: finalText },
+          ]);
+        } catch {
+          // Chat reply was already streamed; persistence is best-effort
         }
 
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));

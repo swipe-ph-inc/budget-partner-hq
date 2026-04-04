@@ -96,9 +96,10 @@ export async function handleMCPTool(
 
     case "get_expenses": {
       let query = supabase
-        .from("expenses")
-        .select("*, category:categories(name), merchant:merchants(name)")
+        .from("transactions")
+        .select("*, category:categories!transactions_category_id_fkey(name), merchant:merchants(name)")
         .eq("user_id", userId)
+        .in("type", ["expense", "credit_charge"])
         .order("date", { ascending: false })
         .limit((input.limit as number) ?? 20);
 
@@ -112,15 +113,17 @@ export async function handleMCPTool(
     }
 
     case "create_expense": {
-      const { data, error } = await supabase.from("expenses").insert({
+      const creditCardId = input.credit_card_id as string | undefined;
+      const { data, error } = await supabase.from("transactions").insert({
         user_id: userId,
+        type: creditCardId ? "credit_charge" : "expense",
         date: input.date as string,
         amount: input.amount as number,
         currency_code: input.currency_code as string,
         category_id: input.category_id as string | undefined,
         merchant_id: input.merchant_id as string | undefined,
-        account_id: input.account_id as string | undefined,
-        credit_card_id: input.credit_card_id as string | undefined,
+        from_account_id: !creditCardId ? (input.account_id as string | undefined) : undefined,
+        credit_card_id: creditCardId,
         description: input.description as string | undefined,
         tags: input.tags as string[] | undefined,
       }).select().single();
@@ -254,9 +257,10 @@ export async function handleMCPTool(
 
     case "get_spending_by_category": {
       const { data } = await supabase
-        .from("expenses")
-        .select("amount, category:categories(id, name, color)")
+        .from("transactions")
+        .select("amount, category:categories!transactions_category_id_fkey(id, name, color)")
         .eq("user_id", userId)
+        .in("type", ["expense", "credit_charge"])
         .gte("date", input.start_date as string)
         .lte("date", input.end_date as string);
 
@@ -551,6 +555,227 @@ export async function handleMCPTool(
       if (input.status) query = query.eq("status", input.status as string);
       const { data } = await query;
       return data ?? [];
+    }
+
+    // ── CREATE handlers ────────────────────────────────────────────────────
+
+    case "create_account": {
+      const initialBalance = (input.initial_balance as number) ?? 0;
+
+      const { data: account, error } = await supabase
+        .from("accounts")
+        .insert({
+          user_id: userId,
+          name: input.name as string,
+          type: input.type as string,
+          currency_code: input.currency_code as string,
+          institution: (input.institution as string) ?? null,
+          balance: initialBalance,
+          color: (input.color as string) ?? null,
+          notes: (input.notes as string) ?? null,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+
+      // Record initial balance as an income transaction so balance is trackable
+      if (initialBalance > 0) {
+        await supabase.from("transactions").insert({
+          user_id: userId,
+          type: "income",
+          amount: initialBalance,
+          date: format(new Date(), "yyyy-MM-dd"),
+          currency_code: input.currency_code as string,
+          to_account_id: account.id,
+          description: "Initial balance",
+          income_type: "other",
+          is_collected: true,
+        });
+      }
+
+      return account;
+    }
+
+    case "create_category": {
+      const { data, error } = await supabase
+        .from("categories")
+        .insert({
+          user_id: userId,
+          name: input.name as string,
+          type: (input.type as string) ?? "expense",
+          color: (input.color as string) ?? null,
+          icon: (input.icon as string) ?? null,
+          budget_amount: (input.budget_amount as number) ?? null,
+          is_survival: (input.is_survival as boolean) ?? false,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+      return data;
+    }
+
+    case "create_merchant": {
+      const { data, error } = await supabase
+        .from("merchants")
+        .insert({
+          user_id: userId,
+          name: input.name as string,
+          category_id: (input.category_id as string) ?? null,
+          notes: (input.notes as string) ?? null,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+      return data;
+    }
+
+    case "create_subscription": {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .insert({
+          user_id: userId,
+          name: input.name as string,
+          provider: (input.provider as string) ?? null,
+          amount: input.amount as number,
+          currency_code: input.currency_code as string,
+          billing_cycle: input.billing_cycle as string,
+          next_billing_date: input.next_billing_date as string,
+          payment_method_type: input.payment_method_type as string,
+          credit_card_id: (input.credit_card_id as string) ?? null,
+          account_id: (input.account_id as string) ?? null,
+          category_id: (input.category_id as string) ?? null,
+          auto_log_transaction: (input.auto_log_transaction as boolean) ?? true,
+          notes: (input.notes as string) ?? null,
+          status: "active",
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+      return data;
+    }
+
+    case "create_debt": {
+      const { data, error } = await supabase
+        .from("debts")
+        .insert({
+          user_id: userId,
+          name: input.name as string,
+          type: input.type as string,
+          original_amount: input.original_amount as number,
+          current_balance: input.current_balance as number,
+          currency_code: input.currency_code as string,
+          interest_rate: (input.interest_rate as number) ?? 0,
+          monthly_payment: (input.monthly_payment as number) ?? null,
+          payment_due_day: (input.payment_due_day as number) ?? null,
+          lender_name: (input.lender_name as string) ?? null,
+          start_date: (input.start_date as string) ?? null,
+          expected_end_date: (input.expected_end_date as string) ?? null,
+          notes: (input.notes as string) ?? null,
+          status: "active",
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+      return data;
+    }
+
+    case "create_savings_plan": {
+      const initialAmount = (input.initial_amount as number) ?? 0;
+
+      const { data: plan, error } = await supabase
+        .from("savings_plans")
+        .insert({
+          user_id: userId,
+          name: input.name as string,
+          target_amount: input.target_amount as number,
+          currency_code: input.currency_code as string,
+          target_date: (input.target_date as string) ?? null,
+          linked_account_id: (input.linked_account_id as string) ?? null,
+          current_amount: initialAmount,
+          color: (input.color as string) ?? null,
+          icon: (input.icon as string) ?? null,
+          is_achieved: false,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+
+      // Seed an initial contribution if provided
+      if (initialAmount > 0 && plan) {
+        await supabase.from("savings_contributions").insert({
+          savings_plan_id: plan.id,
+          amount: initialAmount,
+          date: format(new Date(), "yyyy-MM-dd"),
+          notes: "Initial amount",
+        });
+      }
+
+      return plan;
+    }
+
+    case "create_invoice": {
+      const lineItems = (input.line_items as Array<{ description: string; quantity: number; unit_price: number }>) ?? [];
+      const subtotal = lineItems.reduce((s, item) => s + item.quantity * item.unit_price, 0);
+      const taxRate = (input.tax_rate as number) ?? 0;
+      const taxAmount = subtotal * taxRate;
+      const discountAmount = (input.discount_amount as number) ?? 0;
+      const total = subtotal + taxAmount - discountAmount;
+      const issueDate = (input.issue_date as string) ?? format(new Date(), "yyyy-MM-dd");
+
+      // Auto-generate invoice number if not provided
+      let invoiceNumber = input.invoice_number as string | undefined;
+      if (!invoiceNumber) {
+        const { count } = await supabase
+          .from("invoices")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId);
+        invoiceNumber = `INV-${String((count ?? 0) + 1).padStart(3, "0")}`;
+      }
+
+      const { data: invoice, error } = await supabase
+        .from("invoices")
+        .insert({
+          user_id: userId,
+          invoice_number: invoiceNumber,
+          client_name: input.client_name as string,
+          client_email: (input.client_email as string) ?? null,
+          client_address: (input.client_address as string) ?? null,
+          issue_date: issueDate,
+          due_date: input.due_date as string,
+          currency_code: input.currency_code as string,
+          subtotal,
+          tax_rate: taxRate,
+          tax_amount: taxAmount,
+          discount_amount: discountAmount,
+          total,
+          status: "draft",
+          notes: (input.notes as string) ?? null,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+
+      // Insert line items
+      if (lineItems.length > 0 && invoice) {
+        await supabase.from("invoice_line_items").insert(
+          lineItems.map((item) => ({
+            invoice_id: invoice.id,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.quantity * item.unit_price,
+          }))
+        );
+      }
+
+      return { ...invoice, line_items: lineItems };
     }
 
     default:

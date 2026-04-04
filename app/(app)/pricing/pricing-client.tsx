@@ -12,7 +12,7 @@ import {
   formatPlanMoneyUsd,
   proAnnualPriceUsd,
 } from "@/lib/plans";
-import { selectPlan, createPaymongoCheckout, type SelectablePlanId } from "./actions";
+import { downgradeTofree, createPaymongoCheckout, type SelectablePlanId } from "./actions";
 
 const PRO_MONTHLY_FULL_YEAR_USD = PRO_MONTHLY_PRICE_USD * 12;
 const PRO_ANNUAL_USD = proAnnualPriceUsd();
@@ -139,7 +139,7 @@ export function PricingPageClient({
     setPendingId(id);
     startTransition(async () => {
       if (id === "free") {
-        const res = await selectPlan("free");
+        const res = await downgradeTofree();
         setPendingId(null);
         if (res.ok) {
           setMessage({ type: "ok", text: "You are now on the Free plan." });

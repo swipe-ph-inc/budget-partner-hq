@@ -19,7 +19,10 @@ No test suite is configured. Build verification: `npm run build`.
 Required in `.env.local` (see `.env.example`):
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase project
 - `SUPABASE_SERVICE_ROLE_KEY` — Admin operations (server-side only)
-- `ANTHROPIC_API_KEY` — Claude API for `/api/ai/chat`
+- `AI_PROVIDER` — `openrouter` (default) or `anthropic` for `/api/ai/chat`
+- `OPEN_ROUTER_API_KEY` — OpenRouter (required when `AI_PROVIDER=openrouter`)
+- `OPEN_ROUTER_MODEL` — Optional; defaults to `openai/gpt-4o-mini`
+- `ANTHROPIC_API_KEY` — Direct Anthropic API (when `AI_PROVIDER=anthropic`)
 - `NEXT_PUBLIC_APP_URL` — App base URL
 - `CRON_SECRET` — Protects `/api/cron/*` routes from unauthorized calls
 
@@ -42,7 +45,7 @@ Required in `.env.local` (see `.env.example`):
 - The `selectPlan` Server Action in `app/(app)/pricing/actions.ts` writes plan changes directly to `profiles` (no payment processor yet).
 - DB-level enforcement via `is_pro_subscriber(uuid)` SQL function + RLS policies on `accounts` and `credit_cards` insert (free users capped at 3 active each).
 
-**AI integration:** `app/api/ai/chat/route.ts` implements an agentic loop — sends user messages + MCP tools to Claude (`claude-sonnet-4-20250514`), executes any tool calls via `lib/mcp/handlers.ts`, and streams SSE responses back. The system prompt is built dynamically per user from `lib/ai/system-prompt.ts` using preferences in the `prompt_settings` table.
+**AI integration:** `app/api/ai/chat/route.ts` runs an agentic loop with MCP tools. Deployment defaults: `AI_PROVIDER` (OpenRouter vs Anthropic) and `OPEN_ROUTER_MODEL` / `ANTHROPIC_MODEL`. **Per-user overrides** live on `prompt_settings.ai_provider` and `prompt_settings.ai_model` (null = use deployment defaults); users edit these under **Profile → AI Settings**. Resolution: `lib/ai/resolve-user-llm.ts`. Tool execution: `lib/mcp/handlers.ts`. System prompt: `lib/ai/system-prompt.ts` and optional `system_prompts` DB row.
 
 **MCP tools** (`lib/mcp/tools.ts` + `lib/mcp/handlers.ts`): 20+ tools for reading/writing financial data (accounts, transactions, credit cards, debts, savings, subscriptions, invoices, categories, merchants, financial health). Each handler queries Supabase with `user_id` filter. `app/api/mcp/route.ts` exposes these as a JSON-RPC 2.0 endpoint.
 

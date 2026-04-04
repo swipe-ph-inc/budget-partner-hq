@@ -355,4 +355,174 @@ export const MCP_TOOLS: Tool[] = [
       },
     },
   },
+
+  // ── CREATE tools ──────────────────────────────────────────────────────────
+
+  {
+    name: "create_account",
+    description: "Create a new financial account (savings, checking, e-wallet, or cash).",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Account name e.g. 'BDO Savings'" },
+        type: {
+          type: "string",
+          enum: ["savings", "checking", "ewallet", "cash"],
+          description: "Account type",
+        },
+        currency_code: { type: "string", description: "Currency code e.g. PHP" },
+        institution: { type: "string", description: "Bank or provider name" },
+        initial_balance: { type: "number", description: "Starting balance. Defaults to 0." },
+        color: { type: "string", description: "Hex color for the account card" },
+        notes: { type: "string" },
+      },
+      required: ["name", "type", "currency_code"],
+    },
+  },
+
+  {
+    name: "create_category",
+    description: "Create a new expense or income category.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Category name e.g. 'Groceries'" },
+        type: {
+          type: "string",
+          enum: ["income", "expense", "both"],
+          description: "Category type. Defaults to expense.",
+        },
+        color: { type: "string", description: "Hex color code e.g. #e74c3c" },
+        icon: { type: "string", description: "Icon identifier" },
+        budget_amount: { type: "number", description: "Optional monthly budget for this category" },
+        is_survival: { type: "boolean", description: "Mark as survival/essential expense. Default false." },
+      },
+      required: ["name"],
+    },
+  },
+
+  {
+    name: "create_merchant",
+    description: "Create a new merchant record so it can be linked to transactions and expenses.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Merchant name e.g. 'Jollibee'" },
+        category_id: { type: "string", description: "Default category UUID for this merchant" },
+        notes: { type: "string" },
+      },
+      required: ["name"],
+    },
+  },
+
+  {
+    name: "create_subscription",
+    description: "Add a recurring subscription to track (Netflix, Spotify, gym, etc.).",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Subscription name e.g. 'Netflix'" },
+        provider: { type: "string", description: "Provider/brand name" },
+        amount: { type: "number", description: "Billing amount" },
+        currency_code: { type: "string", description: "Currency code e.g. PHP" },
+        billing_cycle: {
+          type: "string",
+          enum: ["weekly", "monthly", "quarterly", "yearly"],
+        },
+        next_billing_date: { type: "string", description: "ISO date YYYY-MM-DD of the next charge" },
+        payment_method_type: {
+          type: "string",
+          enum: ["credit_card", "account"],
+        },
+        credit_card_id: { type: "string", description: "Credit card UUID if paid by card" },
+        account_id: { type: "string", description: "Account UUID if paid by account" },
+        category_id: { type: "string" },
+        auto_log_transaction: {
+          type: "boolean",
+          description: "Auto-create a transaction on billing date. Default true.",
+        },
+        notes: { type: "string" },
+      },
+      required: ["name", "amount", "currency_code", "billing_cycle", "next_billing_date", "payment_method_type"],
+    },
+  },
+
+  {
+    name: "create_debt",
+    description: "Add a new debt to track — personal loan, government loan, informal, or other.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Debt name e.g. 'SSS Salary Loan'" },
+        type: {
+          type: "string",
+          enum: ["personal_loan", "government_loan", "informal", "other"],
+        },
+        original_amount: { type: "number", description: "Original principal amount" },
+        current_balance: { type: "number", description: "Remaining balance to pay" },
+        currency_code: { type: "string", description: "Currency code e.g. PHP" },
+        interest_rate: { type: "number", description: "Annual interest rate as decimal e.g. 0.12 for 12%" },
+        monthly_payment: { type: "number", description: "Required monthly payment amount" },
+        payment_due_day: { type: "number", description: "Day of month payment is due (1-28)" },
+        lender_name: { type: "string", description: "Name of lender or person owed" },
+        start_date: { type: "string", description: "ISO date YYYY-MM-DD when debt started" },
+        expected_end_date: { type: "string", description: "ISO date YYYY-MM-DD expected payoff date" },
+        notes: { type: "string" },
+      },
+      required: ["name", "type", "original_amount", "current_balance", "currency_code"],
+    },
+  },
+
+  {
+    name: "create_savings_plan",
+    description: "Create a new savings goal (emergency fund, vacation, gadget, down payment, etc.).",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Goal name e.g. 'Emergency Fund'" },
+        target_amount: { type: "number", description: "Target amount to save" },
+        currency_code: { type: "string", description: "Currency code e.g. PHP" },
+        target_date: { type: "string", description: "ISO date YYYY-MM-DD target completion date" },
+        linked_account_id: { type: "string", description: "Account UUID where savings are held" },
+        initial_amount: { type: "number", description: "Amount already saved. Defaults to 0." },
+        color: { type: "string", description: "Hex color for the goal card" },
+        icon: { type: "string", description: "Icon identifier" },
+      },
+      required: ["name", "target_amount", "currency_code"],
+    },
+  },
+
+  {
+    name: "create_invoice",
+    description: "Create a new invoice for a client with line items.",
+    input_schema: {
+      type: "object",
+      properties: {
+        client_name: { type: "string", description: "Client or company name" },
+        client_email: { type: "string" },
+        client_address: { type: "string" },
+        invoice_number: { type: "string", description: "Invoice number e.g. INV-001. Auto-generated if omitted." },
+        issue_date: { type: "string", description: "ISO date YYYY-MM-DD. Defaults to today." },
+        due_date: { type: "string", description: "ISO date YYYY-MM-DD payment due date" },
+        currency_code: { type: "string", description: "Currency code e.g. PHP" },
+        tax_rate: { type: "number", description: "Tax rate as decimal e.g. 0.12 for 12% VAT. Default 0." },
+        discount_amount: { type: "number", description: "Flat discount amount. Default 0." },
+        notes: { type: "string" },
+        line_items: {
+          type: "array",
+          description: "Invoice line items",
+          items: {
+            type: "object",
+            properties: {
+              description: { type: "string" },
+              quantity: { type: "number" },
+              unit_price: { type: "number" },
+            },
+            required: ["description", "quantity", "unit_price"],
+          },
+        },
+      },
+      required: ["client_name", "due_date", "currency_code", "line_items"],
+    },
+  },
 ];

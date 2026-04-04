@@ -15,13 +15,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { User, Bot, Loader2, CheckCircle2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { isProSubscriber } from "@/lib/subscription-access";
+import { ANTHROPIC_MODEL_PRESETS, OPENROUTER_MODEL_PRESETS } from "@/lib/ai/llm-presets";
 import type { Database } from "@/types/database";
 import { useRouter } from "next/navigation";
+import { SUPPORTED_CURRENCY_CODES } from "@/lib/currencies";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
-type PromptSettings = Database["public"]["Tables"]["prompt_settings"]["Row"];
-
-const CURRENCIES = ["PHP", "USD", "EUR", "GBP", "SGD", "AUD", "JPY", "HKD"];
 const TIMEZONES = ["Asia/Manila", "America/New_York", "Europe/London", "Asia/Singapore", "Australia/Sydney", "Asia/Tokyo"];
 
 function ProfileSection({ profile, onSave }: { profile: Profile; onSave: (updated: Partial<Profile>) => Promise<void> }) {
@@ -58,7 +57,11 @@ function ProfileSection({ profile, onSave }: { profile: Profile; onSave: (update
           <Select value={baseCurrency} onValueChange={setBaseCurrency}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {SUPPORTED_CURRENCY_CODES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">All amounts will be displayed in this currency when converting.</p>
@@ -124,7 +127,13 @@ function ProfileSection({ profile, onSave }: { profile: Profile; onSave: (update
   );
 }
 
-function PromptSettingsSection({ settings, onSave }: { settings: PromptSettings; onSave: (updated: Partial<PromptSettings>) => Promise<void> }) {
+function PromptSettingsSection({
+  settings,
+  onSave,
+}: {
+  settings: Profile;
+  onSave: (updated: Partial<Profile>) => Promise<void>;
+}) {
   const [prefix, setPrefix] = useState(settings.system_prompt_prefix ?? "");
   const [personality, setPersonality] = useState(settings.ai_personality);
   const [language, setLanguage] = useState(settings.response_language);
@@ -133,12 +142,61 @@ function PromptSettingsSection({ settings, onSave }: { settings: PromptSettings;
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const [llmProvider, setLlmProvider] = useState<"env" | "openrouter" | "anthropic">("env");
+  const [llmModelMode, setLlmModelMode] = useState<"env" | "preset" | "custom">("env");
+  const [llmPreset, setLlmPreset] = useState(OPENROUTER_MODEL_PRESETS[0].id);
+  const [llmCustom, setLlmCustom] = useState("");
+
+  React.useEffect(() => {
+    const prov = settings.ai_provider;
+    setLlmProvider(prov === "openrouter" || prov === "anthropic" ? prov : "env");
+    const m = settings.ai_model?.trim();
+    if (!m) {
+      setLlmModelMode("env");
+      return;
+    }
+    const allPresets = [...OPENROUTER_MODEL_PRESETS, ...ANTHROPIC_MODEL_PRESETS];
+    if (allPresets.some((p) => p.id === m)) {
+      setLlmModelMode("preset");
+      setLlmPreset(m);
+    } else {
+      setLlmModelMode("custom");
+      setLlmCustom(m);
+    }
+  }, [settings.ai_provider, settings.ai_model, settings.updated_at]);
+
+  const activePresets =
+    llmProvider === "anthropic" ? ANTHROPIC_MODEL_PRESETS : OPENROUTER_MODEL_PRESETS;
+
+  React.useEffect(() => {
+    if (llmModelMode !== "preset") return;
+    const presets = llmProvider === "anthropic" ? ANTHROPIC_MODEL_PRESETS : OPENROUTER_MODEL_PRESETS;
+    setLlmPreset((prev) => (presets.some((p) => p.id === prev) ? prev : presets[0].id));
+  }, [llmProvider, llmModelMode]);
+
   const tokenCount = prefix.length;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await onSave({ system_prompt_prefix: prefix || null, ai_personality: personality, response_language: language, preferred_currency_display: currencyDisplay, enable_proactive_alerts: proactiveAlerts });
+    const ai_provider =
+      llmProvider === "env" ? null : (llmProvider as "openrouter" | "anthropic");
+    let ai_model: string | null = null;
+    if (llmModelMode === "preset") {
+      ai_model = llmPreset;
+    } else if (llmModelMode === "custom") {
+      const t = llmCustom.trim();
+      ai_model = t || null;
+    }
+    await onSave({
+      system_prompt_prefix: prefix || null,
+      ai_personality: personality,
+      response_language: language,
+      preferred_currency_display: currencyDisplay,
+      enable_proactive_alerts: proactiveAlerts,
+      ai_provider,
+      ai_model,
+    });
     setLoading(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -146,6 +204,89 @@ function PromptSettingsSection({ settings, onSave }: { settings: PromptSettings;
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
+      <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-foreground">Default LLM</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            Choose how Budget Partner AI runs for your account. Leave both on workspace defaults to
+            follow server configuration (env). OpenRouter hosts many models; Anthropic uses your
+            workspace&apos;s direct Claude API key.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Provider</Label>
+            <Select
+              value={llmProvider}
+              onValueChange={(v) => setLlmProvider(v as "env" | "openrouter" | "anthropic")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="env">Workspace default</SelectItem>
+                <SelectItem value="openrouter">OpenRouter</SelectItem>
+                <SelectItem value="anthropic">Anthropic (direct)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Model</Label>
+            <Select
+              value={llmModelMode}
+              onValueChange={(v) => setLlmModelMode(v as "env" | "preset" | "custom")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="env">Workspace default</SelectItem>
+                <SelectItem value="preset">Preset</SelectItem>
+                <SelectItem value="custom">Custom model ID</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {llmModelMode === "preset" && (
+          <div className="space-y-2">
+            <Label>Preset</Label>
+            <Select value={llmPreset} onValueChange={setLlmPreset}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {activePresets.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {llmProvider === "anthropic"
+                ? "Direct Claude model ids (no slash)."
+                : "OpenRouter model ids (provider/model)."}
+            </p>
+          </div>
+        )}
+        {llmModelMode === "custom" && (
+          <div className="space-y-2">
+            <Label htmlFor="llm-custom">Model ID</Label>
+            <Input
+              id="llm-custom"
+              value={llmCustom}
+              onChange={(e) => setLlmCustom(e.target.value)}
+              placeholder={
+                llmProvider === "anthropic"
+                  ? "e.g. claude-haiku-4-5"
+                  : "e.g. openai/gpt-4o-mini"
+              }
+              className="font-mono text-sm"
+            />
+          </div>
+        )}
+      </div>
+
       <div className="space-y-2">
         <Label>AI personality</Label>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -171,16 +312,29 @@ function PromptSettingsSection({ settings, onSave }: { settings: PromptSettings;
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor="prefix">Custom system prompt prefix</Label>
-          <span className={`text-xs ${tokenCount > 500 ? "text-warning-700" : "text-muted-foreground"}`}>{tokenCount} chars</span>
+          <div>
+            <Label htmlFor="prefix">Personal instructions</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Your User Prompt — injected at the start of every conversation, below the app&apos;s system configuration.
+            </p>
+          </div>
+          <span className={`text-xs shrink-0 ml-4 ${tokenCount > 500 ? "text-destructive" : "text-muted-foreground"}`}>{tokenCount} chars</span>
         </div>
         <Textarea
           id="prefix"
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
-          placeholder="Add custom instructions that will be prepended to every AI interaction. E.g., 'Always respond in Tagalog' or 'My risk tolerance is conservative'"
+          placeholder="E.g. 'Always respond in Tagalog' · 'My risk tolerance is conservative' · 'Focus on my BDO accounts'"
           rows={4}
         />
+        {prefix && (
+          <div className="rounded-md bg-muted/40 border border-border px-3 py-2">
+            <p className="text-xs text-muted-foreground mb-1 font-medium">Preview — how the AI will see your instructions:</p>
+            <p className="text-xs text-foreground italic">
+              &ldquo;Before we start, here are my personal preferences: {prefix}&rdquo;
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -221,11 +375,6 @@ function PromptSettingsSection({ settings, onSave }: { settings: PromptSettings;
         <Switch checked={proactiveAlerts} onCheckedChange={setProactiveAlerts} />
       </div>
 
-      <div className="bg-secondary rounded-lg p-4 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground mb-1">Preview</p>
-        <p className="italic">&quot;You are the Budget Partner HQ AI assistant. {prefix && `${prefix} `}Be {personality} in your responses.&quot;</p>
-      </div>
-
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : saved ? <><CheckCircle2 className="h-4 w-4" /> Saved!</> : "Save AI settings"}
       </Button>
@@ -235,7 +384,6 @@ function PromptSettingsSection({ settings, onSave }: { settings: PromptSettings;
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [promptSettings, setPromptSettings] = useState<PromptSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   const router = useRouter();
@@ -244,14 +392,8 @@ export default function ProfilePage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      const [{ data: p }, { data: ps }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("prompt_settings").select("*").eq("user_id", user.id).single(),
-      ]);
-
+      const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       setProfile(p);
-      setPromptSettings(ps);
       setLoading(false);
     }
     load();
@@ -262,12 +404,6 @@ export default function ProfilePage() {
     if (!user) return;
     await supabase.from("profiles").update(updated).eq("id", user.id);
     router.refresh();
-  }
-
-  async function savePromptSettings(updated: Partial<PromptSettings>) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("prompt_settings").upsert({ ...updated, user_id: user.id }, { onConflict: "user_id" });
   }
 
   if (loading) {
@@ -354,8 +490,11 @@ export default function ProfilePage() {
               <CardDescription>Customise how your Budget Partner AI behaves and communicates.</CardDescription>
             </CardHeader>
             <CardContent>
-              {promptSettings && (
-                <PromptSettingsSection settings={promptSettings} onSave={savePromptSettings} />
+              {profile && (
+                <PromptSettingsSection
+                  settings={profile}
+                  onSave={saveProfile}
+                />
               )}
             </CardContent>
           </Card>

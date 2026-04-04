@@ -565,6 +565,7 @@ interface Props {
   isPro: boolean;
   /** Inclusive YYYY-MM-DD — free tier only loads from this date onward. */
   freeHistoryMinDate?: string;
+  baseCurrency: string;
 }
 
 const PAGE_SIZE = 50;
@@ -577,6 +578,7 @@ export function TransactionsPageClient({
   creditCards,
   isPro,
   freeHistoryMinDate,
+  baseCurrency,
 }: Props) {
   const router = useRouter();
 
@@ -865,6 +867,7 @@ export function TransactionsPageClient({
               creditCards={creditCards}
               onSuccess={() => setSheetOpen(false)}
               onClose={() => setSheetOpen(false)}
+              defaultCurrency={baseCurrency}
             />
           </div>
         </SheetContent>

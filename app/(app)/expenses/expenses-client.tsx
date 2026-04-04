@@ -34,13 +34,9 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
 
-type Expense = Database["public"]["Tables"]["expenses"]["Row"] & {
+type Expense = Database["public"]["Tables"]["transactions"]["Row"] & {
   categories: { id: string; name: string; color: string | null } | null;
   merchants: { id: string; name: string } | null;
-  /** Row from standalone `expenses` table vs mapped from `transactions`. */
-  source?: "ledger" | "transaction";
-  /** When source is transaction: expense vs credit_charge. */
-  txType?: string;
 };
 
 type Category = { id: string; name: string; color: string | null };
@@ -59,6 +55,7 @@ function ExpenseForm({
   creditCards,
   onSuccess,
   onClose,
+  baseCurrency,
 }: {
   categories: Category[];
   merchants: Merchant[];
@@ -66,10 +63,11 @@ function ExpenseForm({
   creditCards: CreditCard[];
   onSuccess: () => void;
   onClose: () => void;
+  baseCurrency: string;
 }) {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("PHP");
+  const [currency, setCurrency] = useState(baseCurrency);
   const [categoryId, setCategoryId] = useState("__none__");
   const [merchantSearch, setMerchantSearch] = useState("");
   const [merchantId, setMerchantId] = useState("__none__");
@@ -78,7 +76,7 @@ function ExpenseForm({
   const [creditCardId, setCreditCardId] = useState("__none__");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [receiptUrl, setReceiptUrl] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceRule, setRecurrenceRule] = useState<"daily" | "weekly" | "monthly">("monthly");
   const [loading, setLoading] = useState(false);
@@ -112,29 +110,26 @@ function ExpenseForm({
       .map((t) => t.trim())
       .filter(Boolean);
 
-    const payload: Database["public"]["Tables"]["expenses"]["Insert"] = {
+    const isCreditCard = paymentMethod === "credit_card" && creditCardId !== "__none__";
+    const payload: Database["public"]["Tables"]["transactions"]["Insert"] = {
       user_id: user.id,
+      type: isCreditCard ? "credit_charge" : "expense",
       date,
       amount: parseFloat(amount),
       currency_code: currency,
       category_id: categoryId !== "__none__" ? categoryId : null,
       merchant_id: merchantId !== "__none__" ? merchantId : null,
-      account_id:
-        paymentMethod === "account" && accountId !== "__none__"
-          ? accountId
-          : null,
-      credit_card_id:
-        paymentMethod === "credit_card" && creditCardId !== "__none__"
-          ? creditCardId
-          : null,
+      from_account_id:
+        !isCreditCard && accountId !== "__none__" ? accountId : null,
+      credit_card_id: isCreditCard ? creditCardId : null,
       description: description || null,
       tags: tagArray.length > 0 ? tagArray : null,
-      receipt_url: receiptUrl || null,
+      attachment_url: attachmentUrl || null,
       is_recurring: isRecurring,
       recurrence_rule: isRecurring ? recurrenceRule : null,
     };
 
-    const { error: dbError } = await supabase.from("expenses").insert(payload);
+    const { error: dbError } = await supabase.from("transactions").insert(payload);
 
     if (dbError) {
       setError(dbError.message);
@@ -342,17 +337,17 @@ function ExpenseForm({
         />
       </div>
 
-      {/* Receipt upload placeholder */}
+      {/* Attachment */}
       <div className="space-y-2">
-        <Label htmlFor="exp-receipt">Receipt URL</Label>
+        <Label htmlFor="exp-attachment">Receipt URL</Label>
         <div className="flex gap-2">
           <Input
-            id="exp-receipt"
-            value={receiptUrl}
-            onChange={(e) => setReceiptUrl(e.target.value)}
+            id="exp-attachment"
+            value={attachmentUrl}
+            onChange={(e) => setAttachmentUrl(e.target.value)}
             placeholder="Upload receipt (paste URL)"
           />
-          {!receiptUrl && (
+          {!attachmentUrl && (
             <Button type="button" variant="outline" size="icon" disabled>
               <Receipt className="h-4 w-4" />
             </Button>
@@ -383,7 +378,7 @@ function ExpenseForm({
             <Label>Recurrence pattern</Label>
             <Select
               value={recurrenceRule}
-              onValueChange={(v) => setRecurrenceRule(v as any)}
+              onValueChange={(v) => setRecurrenceRule(v as typeof RECURRENCE_RULES[number])}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -425,6 +420,7 @@ interface Props {
   creditCards: CreditCard[];
   isPro: boolean;
   freeHistoryMinDate?: string;
+  baseCurrency: string;
 }
 
 export function ExpensesPageClient({
@@ -435,6 +431,7 @@ export function ExpensesPageClient({
   creditCards,
   isPro,
   freeHistoryMinDate,
+  baseCurrency,
 }: Props) {
   const router = useRouter();
 
@@ -512,7 +509,7 @@ export function ExpensesPageClient({
           <p className="text-sm text-muted-foreground mt-0.5">
             {filtered.length} records ·{" "}
             <span className="font-semibold text-destructive">
-              {formatCurrency(runningTotal, "PHP")}
+              {formatCurrency(runningTotal, baseCurrency)}
             </span>{" "}
             total
             {!isPro && freeHistoryMinDate && (
@@ -520,11 +517,6 @@ export function ExpensesPageClient({
                 Free plan: history from {formatDate(freeHistoryMinDate, "MMM d, yyyy")} onward
               </span>
             )}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Shows spending from{" "}
-            <span className="font-medium text-foreground">Transactions</span> (expenses and card
-            charges) together with entries you add only here.
           </p>
         </div>
       </div>
@@ -624,7 +616,7 @@ export function ExpensesPageClient({
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             {hasFilters
               ? "Try adjusting your filters."
-              : "Log spending under Transactions (expenses or card charges), or use the + button to add a standalone expense entry here."}
+              : "Log spending under Transactions, or use the + button to add a quick expense here."}
           </p>
         </div>
       ) : (
@@ -652,7 +644,7 @@ export function ExpensesPageClient({
               <div className="space-y-2">
                 {dayExpenses.map((exp) => (
                   <div
-                    key={`${exp.source ?? "ledger"}-${exp.id}`}
+                    key={exp.id}
                     className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 hover:shadow-card-hover transition-all"
                   >
                     {/* Category colour bar */}
@@ -683,9 +675,9 @@ export function ExpensesPageClient({
                             {exp.categories.name}
                           </span>
                         )}
-                        {exp.source === "transaction" && (
+                        {exp.type === "credit_charge" && (
                           <Badge variant="outline" className="text-xs font-normal">
-                            {exp.txType === "credit_charge" ? "Card charge" : "Transactions"}
+                            Card charge
                           </Badge>
                         )}
                         {exp.is_recurring && (
@@ -694,9 +686,9 @@ export function ExpensesPageClient({
                             {exp.recurrence_rule ?? "recurring"}
                           </Badge>
                         )}
-                        {exp.receipt_url && (
+                        {exp.attachment_url && (
                           <a
-                            href={exp.receipt_url}
+                            href={exp.attachment_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-muted-foreground hover:text-foreground transition-colors"
@@ -769,6 +761,7 @@ export function ExpensesPageClient({
               creditCards={creditCards}
               onSuccess={() => setSheetOpen(false)}
               onClose={() => setSheetOpen(false)}
+              baseCurrency={baseCurrency}
             />
           </div>
         </SheetContent>

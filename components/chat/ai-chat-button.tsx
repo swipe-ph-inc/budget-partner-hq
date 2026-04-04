@@ -2,9 +2,12 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Bot, X, Send, Loader2, ChevronDown, Sparkles, Lock } from "lucide-react";
+import { Bot, X, Send, Loader2, ChevronDown, Sparkles, Lock, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getOfflineAssistantReply, isLikelyNetworkError } from "@/lib/ai/offline-assistant";
+import { useOnlineStatus } from "@/lib/hooks/use-online-status";
+import { AssistantMessageContent } from "@/components/chat/assistant-message-content";
 
 interface Message {
   id: string;
@@ -38,6 +41,7 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const online = useOnlineStatus();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -76,6 +80,25 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
       content: m.content,
     }));
 
+    const deliverOfflineReply = async () => {
+      await new Promise((r) => setTimeout(r, 120));
+      const text = getOfflineAssistantReply(userMsg.content);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsg.id ? { ...m, content: text } : m
+        )
+      );
+    };
+
+    if (aiEnabled && !online) {
+      try {
+        await deliverOfflineReply();
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
@@ -83,7 +106,19 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
         body: JSON.stringify({ messages: apiMessages }),
       });
 
-      if (!res.ok) throw new Error("Failed to get AI response");
+      if (!res.ok) {
+        const raw = await res.text();
+        let detail = `Request failed (${res.status})`;
+        try {
+          const errBody = JSON.parse(raw) as { error?: string };
+          if (typeof errBody.error === "string" && errBody.error.trim()) {
+            detail = errBody.error.trim();
+          }
+        } catch {
+          if (raw.trim()) detail = raw.trim();
+        }
+        throw new Error(detail);
+      }
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No response body");
@@ -91,7 +126,7 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (true) {
+      sseRead: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -102,15 +137,33 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const payload = line.slice(6).trim();
-          if (payload === "[DONE]") break;
+          if (payload === "[DONE]") break sseRead;
 
           try {
             const event = JSON.parse(payload) as {
               type: string;
               text?: string;
+              message?: string;
               tool?: string;
               tool_id?: string;
             };
+
+            if (event.type === "error") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsg.id
+                    ? {
+                        ...m,
+                        content:
+                          typeof event.message === "string" && event.message.trim()
+                            ? event.message.trim()
+                            : "Something went wrong.",
+                      }
+                    : m
+                )
+              );
+              break sseRead;
+            }
 
             if (event.type === "text" && event.text) {
               setMessages((prev) =>
@@ -154,17 +207,21 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
         }
       }
     } catch (err) {
+      if (aiEnabled && isLikelyNetworkError(err)) {
+        await deliverOfflineReply();
+        return;
+      }
+      const fallback = "Sorry, I encountered an error. Please try again.";
+      const message = err instanceof Error && err.message.trim() ? err.message.trim() : fallback;
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantMsg.id
-            ? { ...m, content: "Sorry, I encountered an error. Please try again." }
-            : m
+          m.id === assistantMsg.id ? { ...m, content: message } : m
         )
       );
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages]);
+  }, [input, loading, messages, online, aiEnabled]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -178,14 +235,14 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
       {/* Chat panel — Pro only full chat; free tier sees upgrade message */}
       {open && (
         <div
-          className="fixed bottom-24 right-3 z-50 flex max-h-[min(560px,calc(100vh-8rem))] w-[calc(100vw-1.5rem)] max-w-[400px] flex-col sm:right-6"
+          className="fixed bottom-24 right-3 z-50 flex h-[min(720px,calc(100vh-6rem))] w-[calc(100vw-1.5rem)] max-w-[540px] flex-col sm:right-6"
           style={{
             animation: "slideUp 0.3s ease-out",
           }}
         >
-          <div className="flex flex-col h-full rounded-xl border border-border bg-card shadow-float overflow-hidden">
+          <div className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card shadow-float overflow-hidden">
             {!aiEnabled ? (
-              <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary">
                   <Lock className="h-6 w-6 text-muted-foreground" aria-hidden />
                 </div>
@@ -212,7 +269,7 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm">Budget Partner AI</div>
                 <div className="text-white/60 text-xs">
-                  {loading ? "Thinking…" : "Ready to help"}
+                  {loading ? "Thinking…" : online ? "Ready to help" : "Offline tips"}
                 </div>
               </div>
               <Button
@@ -225,8 +282,21 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
               </Button>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {!online && (
+              <div
+                className="flex shrink-0 items-start gap-2 border-b border-border bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100"
+                role="status"
+              >
+                <WifiOff className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>
+                  You&apos;re offline. You&apos;ll get general budgeting tips only — reconnect for live AI and your
+                  account data.
+                </span>
+              </div>
+            )}
+
+            {/* Messages — flex-1 + min-h-0 keeps a fixed panel height; thread scrolls inside */}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 && (
                 <div className="text-center py-8 space-y-3">
                   <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center mx-auto">
@@ -301,7 +371,9 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
                     )}
 
                     {/* Message bubble */}
-                    {(msg.content || msg.role === "user") && (
+                    {(msg.role === "user" ||
+                      msg.content ||
+                      (loading && msg.role === "assistant")) && (
                       <div
                         className={cn(
                           "rounded-xl px-3.5 py-2.5 text-sm leading-relaxed",
@@ -310,14 +382,26 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
                             : "bg-secondary text-foreground"
                         )}
                       >
-                        {msg.content ||
-                          (loading && msg.role === "assistant" ? (
-                            <div className="flex gap-1 items-center">
-                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "0ms" }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "150ms" }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "300ms" }} />
-                            </div>
-                          ) : null)}
+                        {msg.role === "user" ? (
+                          <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+                        ) : msg.content ? (
+                          <AssistantMessageContent content={msg.content} />
+                        ) : loading ? (
+                          <div className="flex gap-1 items-center">
+                            <span
+                              className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
+                              style={{ animationDelay: "0ms" }}
+                            />
+                            <span
+                              className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
+                              style={{ animationDelay: "150ms" }}
+                            />
+                            <span
+                              className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
+                              style={{ animationDelay: "300ms" }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>

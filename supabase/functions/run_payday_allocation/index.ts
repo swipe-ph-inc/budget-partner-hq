@@ -47,9 +47,10 @@ Deno.serve(async (req) => {
   let survivalEstimate = 15000;
   if (survivalCatIds.length > 0) {
     const { data: survivalExp } = await supabase
-      .from("expenses")
+      .from("transactions")
       .select("amount")
       .eq("user_id", user_id)
+      .in("type", ["expense", "credit_charge"])
       .in("category_id", survivalCatIds)
       .gte("date", threeMonthsAgo);
     survivalEstimate = (survivalExp ?? []).reduce((s: number, e: { amount: number }) => s + e.amount, 0) / 3;

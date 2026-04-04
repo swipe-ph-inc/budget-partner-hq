@@ -33,7 +33,8 @@ export async function createPaymongoCheckout(
   return { ok: true, checkoutUrl: data.checkoutUrl };
 }
 
-export async function selectPlan(plan: SelectablePlanId): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Downgrades the current user to Free. Pro upgrades go through PayMongo checkout only. */
+export async function downgradeTofree(): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -43,20 +44,10 @@ export async function selectPlan(plan: SelectablePlanId): Promise<{ ok: true } |
     return { ok: false, error: "You must be signed in to change plans." };
   }
 
-  const row =
-    plan === "free"
-      ? {
-          plan: "free" as const,
-          plan_expires_at: null as string | null,
-          plan_interval: null as null,
-        }
-      : {
-          plan: "pro" as const,
-          plan_expires_at: null as string | null,
-          plan_interval: (plan === "pro_monthly" ? "monthly" : "annual") as "monthly" | "annual",
-        };
-
-  const { error } = await supabase.from("profiles").update(row).eq("id", user.id);
+  const { error } = await supabase
+    .from("profiles")
+    .update({ plan: "free" as const, plan_expires_at: null, plan_interval: null })
+    .eq("id", user.id);
 
   if (error) {
     return { ok: false, error: error.message };
