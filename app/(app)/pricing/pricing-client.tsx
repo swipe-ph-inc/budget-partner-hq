@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useTransition, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,9 +12,10 @@ import {
   formatPlanMoneyUsd,
   proAnnualPriceUsd,
 } from "@/lib/plans";
-import { selectPlan, type SelectablePlanId } from "./actions";
+import { selectPlan, createPaymongoCheckout, type SelectablePlanId } from "./actions";
 
-const FULL_YEAR_AT_MONTHLY = PRO_MONTHLY_PRICE_USD * 12;
+const PRO_MONTHLY_FULL_YEAR_USD = PRO_MONTHLY_PRICE_USD * 12;
+const PRO_ANNUAL_USD = proAnnualPriceUsd();
 
 const FREE_FEATURES = [
   "Up to 3 accounts & 3 credit cards",
@@ -113,11 +114,21 @@ export function PricingPageClient({
   planInterval: "monthly" | "annual" | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [pendingId, setPendingId] = useState<SelectablePlanId | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  const annualPrice = proAnnualPriceUsd();
+  useEffect(() => {
+    const payment = searchParams.get("payment");
+    if (payment === "success") {
+      setMessage({ type: "ok", text: "Payment received! Your Pro plan will activate shortly." });
+      router.replace("/pricing");
+    } else if (payment === "cancelled") {
+      setMessage({ type: "err", text: "Payment was cancelled. No charges were made." });
+      router.replace("/pricing");
+    }
+  }, [searchParams, router]);
 
   const isCurrentFree = currentPlan === "free";
   const isCurrentMonthly = isPro && (planInterval === "monthly" || planInterval === null);
@@ -127,13 +138,24 @@ export function PricingPageClient({
     setMessage(null);
     setPendingId(id);
     startTransition(async () => {
-      const res = await selectPlan(id);
-      setPendingId(null);
-      if (res.ok) {
-        setMessage({ type: "ok", text: "Your plan has been updated." });
-        router.refresh();
+      if (id === "free") {
+        const res = await selectPlan("free");
+        setPendingId(null);
+        if (res.ok) {
+          setMessage({ type: "ok", text: "You are now on the Free plan." });
+          router.refresh();
+        } else {
+          setMessage({ type: "err", text: res.error });
+        }
       } else {
-        setMessage({ type: "err", text: res.error });
+        // Redirect to PayMongo hosted checkout
+        const res = await createPaymongoCheckout(id);
+        setPendingId(null);
+        if (res.ok) {
+          window.location.href = res.checkoutUrl;
+        } else {
+          setMessage({ type: "err", text: res.error });
+        }
       }
     });
   }
@@ -145,8 +167,7 @@ export function PricingPageClient({
       <div className="text-center">
         <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">Plans &amp; pricing</h1>
         <p className="mt-2 text-sm text-muted-foreground max-w-xl mx-auto">
-          Choose how you use Budget Partner HQ. Prices are shown in USD. Payment checkout will
-          connect here later; for now your selection is saved on your profile.
+          Choose how you use Budget Partner HQ. Prices are in US Dollars (USD) and processed securely via PayMongo.
         </p>
       </div>
 
@@ -186,7 +207,7 @@ export function PricingPageClient({
               <span className="text-sm font-medium text-muted-foreground">/month</span>
             </>
           }
-          subPrice="Billed monthly when checkout is enabled."
+          subPrice="Billed monthly at checkout."
           featured
           features={PRO_FEATURES}
           ctaLabel="Choose Pro"
@@ -201,15 +222,15 @@ export function PricingPageClient({
           priceLine={
             <>
               <span className="font-display text-3xl font-bold text-foreground">
-                {formatPlanMoneyUsd(annualPrice)}
+                {formatPlanMoneyUsd(PRO_ANNUAL_USD)}
               </span>
               <span className="text-sm font-medium text-muted-foreground">/year</span>
             </>
           }
           subPrice={
             <>
-              <span className="line-through opacity-70">{formatPlanMoneyUsd(FULL_YEAR_AT_MONTHLY)}</span>
-              {" "}if paid monthly for 12 months · Save {PRO_ANNUAL_DISCOUNT_PERCENT}%
+              <span className="line-through opacity-70">{formatPlanMoneyUsd(PRO_MONTHLY_FULL_YEAR_USD)}</span>
+              {" "}if billed monthly · Save {PRO_ANNUAL_DISCOUNT_PERCENT}%
             </>
           }
           badge={`Save ${PRO_ANNUAL_DISCOUNT_PERCENT}%`}
@@ -225,7 +246,7 @@ export function PricingPageClient({
       <p className="text-center text-xs text-muted-foreground">
         <Sparkles className="inline h-3.5 w-3.5 align-text-bottom mr-1" aria-hidden />
         Pro Annual = 12 × {formatPlanMoneyUsd(PRO_MONTHLY_PRICE_USD)} with {PRO_ANNUAL_DISCOUNT_PERCENT}% off ={" "}
-        {formatPlanMoneyUsd(annualPrice)} per year.
+        {formatPlanMoneyUsd(PRO_ANNUAL_USD)} per year.
       </p>
     </div>
   );

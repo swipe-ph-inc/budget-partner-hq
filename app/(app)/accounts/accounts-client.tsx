@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Plus, Landmark, Wallet, CreditCard, Banknote, MoreHorizontal, Pencil, Archive, TrendingUp } from "lucide-react";
+import { Plus, Landmark, Wallet, CreditCard, Banknote, MoreHorizontal, Trash2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -20,6 +20,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Database } from "@/types/database";
+import { AccountDeleteDialog } from "@/components/accounts/account-delete-dialog";
+import { Separator } from "@/components/ui/separator";
 
 type Account = Database["public"]["Tables"]["accounts"]["Row"];
 
@@ -158,6 +160,8 @@ function AccountForm({
   const [balanceInput, setBalanceInput] = useState(account ? numericToMoneyRaw(account.balance) : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const supabase = createClient();
   const router = useRouter();
@@ -223,10 +227,20 @@ function AccountForm({
     onSuccess();
   }
 
-  async function handleArchive() {
+  async function handleSoftDelete() {
     if (!account) return;
-    setLoading(true);
-    await supabase.from("accounts").update({ is_active: false }).eq("id", account.id);
+    setDeleteLoading(true);
+    setError(null);
+    const { error: delErr } = await supabase
+      .from("accounts")
+      .update({ is_active: false })
+      .eq("id", account.id);
+    setDeleteLoading(false);
+    if (delErr) {
+      setError(delErr.message);
+      return;
+    }
+    setDeleteOpen(false);
     router.refresh();
     onClose();
   }
@@ -347,12 +361,35 @@ function AccountForm({
         <Button type="submit" disabled={loading || (!account && !canAddAccount)} className="flex-1">
           {loading ? "Saving…" : account ? "Update account" : "Add account"}
         </Button>
-        {account && (
-          <Button type="button" variant="outline" onClick={handleArchive} disabled={loading}>
-            <Archive className="h-4 w-4" />
-          </Button>
-        )}
       </div>
+
+      {account && (
+        <>
+          <Separator className="my-2" />
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Danger zone</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              disabled={loading || deleteLoading}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete account
+            </Button>
+          </div>
+          <AccountDeleteDialog
+            open={deleteOpen}
+            onOpenChange={(o) => {
+              if (!deleteLoading) setDeleteOpen(o);
+            }}
+            accountName={account.name}
+            loading={deleteLoading}
+            onConfirm={handleSoftDelete}
+          />
+        </>
+      )}
     </form>
   );
 }

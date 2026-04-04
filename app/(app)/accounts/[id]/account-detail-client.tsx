@@ -11,6 +11,7 @@ import {
   ArrowRightLeft,
   CreditCard,
   Receipt,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +29,9 @@ import {
   TX_TYPE_LABELS,
 } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
+import { AccountDeleteDialog } from "@/components/accounts/account-delete-dialog";
 import {
   TransactionForm,
   TypeBadge,
@@ -91,9 +94,13 @@ export function AccountDetailClient({
   creditCards,
 }: Props) {
   const router = useRouter();
+  const supabase = createClient();
   const [transactions, setTransactions] = useState(initialTransactions);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [presetType, setPresetType] = useState<TxType>("expense");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     setTransactions(initialTransactions);
@@ -109,6 +116,23 @@ export function AccountDetailClient({
   function openSheet(type: TxType) {
     setPresetType(type);
     setSheetOpen(true);
+  }
+
+  async function handleSoftDelete() {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    const { error } = await supabase
+      .from("accounts")
+      .update({ is_active: false })
+      .eq("id", account.id);
+    setDeleteLoading(false);
+    if (error) {
+      setDeleteError(error.message);
+      return;
+    }
+    setDeleteOpen(false);
+    router.push("/accounts");
+    router.refresh();
   }
 
   return (
@@ -266,6 +290,46 @@ export function AccountDetailClient({
           </div>
         )}
       </div>
+
+      <div className="rounded-xl border border-destructive/25 bg-destructive/[0.03] p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Delete this account</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+              Removes the account from your list. Past transactions remain in your history (soft delete).
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 shrink-0"
+            onClick={() => {
+              setDeleteError(null);
+              setDeleteOpen(true);
+            }}
+            disabled={deleteLoading}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete account
+          </Button>
+        </div>
+        {deleteError && (
+          <p className="text-sm text-destructive mt-2" role="alert">
+            {deleteError}
+          </p>
+        )}
+      </div>
+
+      <AccountDeleteDialog
+        open={deleteOpen}
+        onOpenChange={(o) => {
+          if (!deleteLoading) setDeleteOpen(o);
+        }}
+        accountName={account.name}
+        loading={deleteLoading}
+        onConfirm={handleSoftDelete}
+      />
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="overflow-y-auto">

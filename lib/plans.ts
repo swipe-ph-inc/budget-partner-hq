@@ -1,4 +1,4 @@
-/** Display and checkout helpers — prices in USD as specified for Pro tiers. */
+/** Display and PayMongo checkout — prices in USD. */
 
 export const PRO_MONTHLY_PRICE_USD = 9.99;
 

@@ -69,6 +69,7 @@ export default async function AccountDetailPage({ params }: Props) {
       .select("*")
       .eq("id", id)
       .eq("user_id", user!.id)
+      .eq("is_active", true)
       .single(),
     supabase
       .from("transactions")
