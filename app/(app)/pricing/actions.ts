@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { absolutizeAppOrigin } from "@/lib/app-origin";
 import { revalidatePath } from "next/cache";
 
 export type SelectablePlanId = "free" | "pro_monthly" | "pro_annual";
@@ -16,7 +17,7 @@ export async function createPaymongoCheckout(
 
   if (!user) return { ok: false, error: "You must be signed in to upgrade." };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = absolutizeAppOrigin(process.env.NEXT_PUBLIC_APP_URL, "http://localhost:3000");
 
   const res = await fetch(`${appUrl}/api/paymongo/checkout`, {
     method: "POST",

@@ -13,8 +13,10 @@ import {
 import { assertModelMatchesProvider, resolveUserLlm } from "@/lib/ai/resolve-user-llm";
 import { chatPostBodySchema } from "@/lib/ai/chat-body-schema";
 import { rateLimitAiChat } from "@/lib/rate-limit";
+import { absolutizeAppOrigin } from "@/lib/app-origin";
 
 export async function POST(request: NextRequest) {
+  const appOrigin = absolutizeAppOrigin(process.env.NEXT_PUBLIC_APP_URL, "http://localhost:3000");
   const supabase = await createClient();
   const {
     data: { user },
@@ -214,7 +216,7 @@ Tool usage (required): For balances, transactions, accounts, credit cards, debts
             clientMessages: messagesForApi,
             userId: user.id,
             emit,
-            httpReferer: process.env.NEXT_PUBLIC_APP_URL,
+            httpReferer: appOrigin,
           });
         } else {
           const anthropic = new Anthropic({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { absolutizeAppOrigin } from "@/lib/app-origin";
 import { createCheckoutSession } from "@/lib/paymongo";
 import { PRO_MONTHLY_PRICE_USD, proAnnualPriceUsd } from "@/lib/plans";
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   const isMonthly = plan === "pro_monthly";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = absolutizeAppOrigin(process.env.NEXT_PUBLIC_APP_URL, "http://localhost:3000");
 
   // PayMongo amounts: smallest currency unit (USD cents)
   const amountMinorUnits = isMonthly

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { absolutizeAppOrigin } from "@/lib/app-origin";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
     ],
   },
   manifest: "/favicon_io/site.webmanifest",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://budgetpartnerhq.com"),
+  metadataBase: new URL(absolutizeAppOrigin(process.env.NEXT_PUBLIC_APP_URL)),
   openGraph: {
     type: "website",
     siteName: "Budget Partner HQ",
