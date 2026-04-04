@@ -24,26 +24,19 @@ export default async function InvoicesPage() {
     );
   }
 
-  const [{ data: invoices }, { data: lineItems }, { data: profile }] =
-    await Promise.all([
-      supabase
-        .from("invoices")
-        .select("*")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false }),
-      supabase.from("invoice_line_items").select("*"),
-      supabase
-        .from("profiles")
-        .select("base_currency")
-        .eq("id", user!.id)
-        .single(),
-    ]);
+  const [{ data: invoices }, { data: lineItems }] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select("*")
+      .eq("user_id", user!.id)
+      .order("created_at", { ascending: false }),
+    supabase.from("invoice_line_items").select("*"),
+  ]);
 
   return (
     <InvoicesPageClient
       initialInvoices={invoices ?? []}
       initialLineItems={lineItems ?? []}
-      baseCurrency={profile?.base_currency ?? "PHP"}
     />
   );
 }

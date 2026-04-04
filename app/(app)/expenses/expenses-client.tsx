@@ -30,6 +30,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
@@ -55,7 +56,6 @@ function ExpenseForm({
   creditCards,
   onSuccess,
   onClose,
-  baseCurrency,
 }: {
   categories: Category[];
   merchants: Merchant[];
@@ -63,11 +63,11 @@ function ExpenseForm({
   creditCards: CreditCard[];
   onSuccess: () => void;
   onClose: () => void;
-  baseCurrency: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState(baseCurrency);
+  const [currency, setCurrency] = useState(displayCurrency);
   const [categoryId, setCategoryId] = useState("__none__");
   const [merchantSearch, setMerchantSearch] = useState("");
   const [merchantId, setMerchantId] = useState("__none__");
@@ -420,7 +420,6 @@ interface Props {
   creditCards: CreditCard[];
   isPro: boolean;
   freeHistoryMinDate?: string;
-  baseCurrency: string;
 }
 
 export function ExpensesPageClient({
@@ -431,8 +430,8 @@ export function ExpensesPageClient({
   creditCards,
   isPro,
   freeHistoryMinDate,
-  baseCurrency,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const router = useRouter();
 
   // Filters
@@ -509,7 +508,7 @@ export function ExpensesPageClient({
           <p className="text-sm text-muted-foreground mt-0.5">
             {filtered.length} records ·{" "}
             <span className="font-semibold text-destructive">
-              {formatCurrency(runningTotal, baseCurrency)}
+              {formatCurrency(runningTotal, displayCurrency)}
             </span>{" "}
             total
             {!isPro && freeHistoryMinDate && (
@@ -635,7 +634,7 @@ export function ExpensesPageClient({
                 <span className="text-xs font-semibold text-destructive">
                   {formatCurrency(
                     dayExpenses.reduce((s, e) => s + e.amount, 0),
-                    dayExpenses[0]?.currency_code ?? "PHP"
+                    displayCurrency
                   )}
                 </span>
               </div>
@@ -721,7 +720,7 @@ export function ExpensesPageClient({
                     {/* Amount */}
                     <div className="text-right shrink-0">
                       <p className="font-mono font-semibold text-sm text-destructive tabular-nums">
-                        -{formatCurrency(exp.amount, exp.currency_code)}
+                        -{formatCurrency(exp.amount, displayCurrency)}
                       </p>
                     </div>
                   </div>
@@ -755,13 +754,13 @@ export function ExpensesPageClient({
           </SheetHeader>
           <div className="mt-6">
             <ExpenseForm
+              key={sheetOpen ? "open" : "closed"}
               categories={categories}
               merchants={merchants}
               accounts={accounts}
               creditCards={creditCards}
               onSuccess={() => setSheetOpen(false)}
               onClose={() => setSheetOpen(false)}
-              baseCurrency={baseCurrency}
             />
           </div>
         </SheetContent>

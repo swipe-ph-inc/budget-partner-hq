@@ -32,6 +32,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { AccountDeleteDialog } from "@/components/accounts/account-delete-dialog";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import {
   TransactionForm,
   TypeBadge,
@@ -93,6 +94,7 @@ export function AccountDetailClient({
   merchants,
   creditCards,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const router = useRouter();
   const supabase = createClient();
   const [transactions, setTransactions] = useState(initialTransactions);
@@ -173,7 +175,7 @@ export function AccountDetailClient({
                 account.balance >= 0 ? "text-foreground" : "text-destructive"
               )}
             >
-              {formatCurrency(account.balance, account.currency_code)}
+              {formatCurrency(account.balance, displayCurrency)}
             </p>
           </div>
         </div>

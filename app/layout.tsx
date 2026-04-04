@@ -2,12 +2,38 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Budget Partner HQ",
+  title: {
+    default: "Budget Partner HQ",
+    template: "%s | Budget Partner HQ",
+  },
   description:
-    "Your personal finance command centre — track accounts, credit cards, expenses, and grow your wealth with AI-powered guidance.",
+    "Your personal finance command centre — track accounts, credit cards, expenses, debts, and savings. Grow your wealth with AI-powered guidance.",
+  keywords: ["personal finance", "budget tracker", "expense tracker", "debt manager", "savings goals", "AI finance assistant"],
+  authors: [{ name: "Budget Partner HQ" }],
   icons: {
-    icon: "/bp_logo.png",
-    apple: "/bp_logo.png",
+    icon: [
+      { url: "/favicon_io/favicon.ico" },
+      { url: "/favicon_io/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon_io/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [
+      { url: "/favicon_io/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      { rel: "android-chrome", url: "/favicon_io/android-chrome-192x192.png", sizes: "192x192" },
+      { rel: "android-chrome", url: "/favicon_io/android-chrome-512x512.png", sizes: "512x512" },
+    ],
+  },
+  manifest: "/favicon_io/site.webmanifest",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://budgetpartnerhq.com"),
+  openGraph: {
+    type: "website",
+    siteName: "Budget Partner HQ",
+    images: [{ url: "/favicon_io/android-chrome-512x512.png", width: 512, height: 512, alt: "Budget Partner HQ" }],
+  },
+  twitter: {
+    card: "summary",
+    images: ["/favicon_io/android-chrome-512x512.png"],
   },
 };
 

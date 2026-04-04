@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import {
   sanitizeMoneyInputNonNegative,
   formatMoneyInputDisplay,
@@ -264,6 +265,7 @@ function PlanCard({
   contributions: SavingsContribution[];
   accounts: Account[];
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [showContrib, setShowContrib] = useState(false);
   const [showContribForm, setShowContribForm] = useState(false);
   const supabase = createClient();
@@ -305,7 +307,7 @@ function PlanCard({
             <div className="min-w-0">
               <p className="font-semibold text-foreground truncate">{plan.name}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Target: {formatCurrency(plan.target_amount, plan.currency_code)}
+                Target: {formatCurrency(plan.target_amount, displayCurrency)}
               </p>
             </div>
           </div>
@@ -335,10 +337,10 @@ function PlanCard({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-lg font-display font-bold text-foreground">
-              {formatCurrency(plan.current_amount, plan.currency_code)}
+              {formatCurrency(plan.current_amount, displayCurrency)}
             </p>
             <p className="text-xs text-muted-foreground">
-              of {formatCurrency(plan.target_amount, plan.currency_code)}
+              of {formatCurrency(plan.target_amount, displayCurrency)}
             </p>
             <div className="mt-2 space-y-1">
               {projectedDate && (
@@ -414,7 +416,7 @@ function PlanCard({
                   >
                     <div>
                       <span className="font-medium text-foreground">
-                        {formatCurrency(c.amount, plan.currency_code)}
+                        {formatCurrency(c.amount, displayCurrency)}
                       </span>
                       {c.notes && (
                         <span className="text-muted-foreground ml-1.5">· {c.notes}</span>
@@ -442,9 +444,10 @@ function AddPlanForm({
   onSuccess: () => void;
   onClose: () => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
-  const [currency, setCurrency] = useState("PHP");
+  const [currency, setCurrency] = useState(displayCurrency);
   const [targetDate, setTargetDate] = useState("");
   const [linkedAccountId, setLinkedAccountId] = useState<string>("");
   const [color, setColor] = useState(PLAN_COLORS[0]);
@@ -626,16 +629,15 @@ function AddPlanForm({
 interface Props {
   initialPlans: SavingsPlan[];
   accounts: Account[];
-  baseCurrency: string;
   initialContributions: SavingsContribution[];
 }
 
 export function SavingsPageClient({
   initialPlans,
   accounts,
-  baseCurrency,
   initialContributions,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const totalSaved = initialPlans.reduce((sum, p) => sum + p.current_amount, 0);
@@ -647,7 +649,7 @@ export function SavingsPageClient({
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">Total saved across all goals</p>
           <p className="mt-0.5 text-2xl font-display font-bold text-foreground sm:text-3xl">
-            {formatCurrency(totalSaved, baseCurrency)}
+            {formatCurrency(totalSaved, displayCurrency)}
           </p>
         </div>
         <Button onClick={() => setSheetOpen(true)} className="w-full shrink-0 sm:w-auto">

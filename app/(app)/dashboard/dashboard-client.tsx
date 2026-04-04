@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { formatCurrency, formatDate, utilColour, TX_TYPE_LABELS, TX_TYPE_COLORS, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, utilColour, TX_TYPE_LABELS, TX_TYPE_COLORS, cn, getCurrencySymbol } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -39,7 +40,6 @@ interface Props {
   activeSubscriptions: Subscription[];
   activeDebts: Debt[];
   healthSnapshot: HealthSnapshot | null;
-  baseCurrency: string;
   displayName: string;
   allocation: Allocation | null;
   upcomingDueDates: Array<{ due_date: string; statement_balance: number; minimum_payment: number | null; credit_card?: { name: string } | null }>;
@@ -84,11 +84,12 @@ function CircularProgress({ pct, size = 80, colour = "green" }: { pct: number; s
 
 export function DashboardClient({
   accounts, creditCards, recentTransactions, savingsPlans, activeSubscriptions,
-  activeDebts, healthSnapshot, baseCurrency, displayName, allocation,
+  activeDebts, healthSnapshot, displayName, allocation,
   upcomingDueDates, categories, spendByCategory, cashFlowData, monthlyIncome,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
+  const sym = getCurrencySymbol(displayCurrency);
   const today = new Date();
-  const sym = baseCurrency === "PHP" ? "₱" : baseCurrency;
 
   // Compute totals
   const totalAccountBalance = accounts.reduce((s, a) => s + a.balance, 0);
@@ -181,9 +182,9 @@ export function DashboardClient({
         <p className="text-muted-foreground text-sm mt-1">{format(today, "EEEE, MMMM d, yyyy")}</p>
 
         <div className="flex gap-3 mt-4 overflow-x-auto pb-1 no-scrollbar">
-          <HealthChip label="Net Worth" value={formatCurrency(netWorth, baseCurrency)} colour={netWorth >= 0 ? "green" : "red"} />
+          <HealthChip label="Net Worth" value={formatCurrency(netWorth, displayCurrency)} colour={netWorth >= 0 ? "green" : "red"} />
           {safeToSpend !== null && (
-            <HealthChip label="Safe to Spend" value={formatCurrency(safeToSpend, baseCurrency)} colour={safeToSpend > 5000 ? "green" : safeToSpend > 0 ? "amber" : "red"} />
+            <HealthChip label="Safe to Spend" value={formatCurrency(safeToSpend, displayCurrency)} colour={safeToSpend > 5000 ? "green" : safeToSpend > 0 ? "amber" : "red"} />
           )}
           <HealthChip label="Buffer" value={`${buffer.toFixed(1)} mo`} colour={bufferColour} />
           <HealthChip label="Debt/Income" value={`${(dtiRatio * 100).toFixed(0)}%`} colour={dtiColour} />
@@ -202,7 +203,7 @@ export function DashboardClient({
                 <CardContent className="p-5">
                   <p className="text-white/70 text-xs font-medium uppercase tracking-wide">Safe to Spend</p>
                   <p className="font-display text-3xl font-bold mt-1 text-white">
-                    {formatCurrency(safeToSpend, baseCurrency)}
+                    {formatCurrency(safeToSpend, displayCurrency)}
                   </p>
                   <p className="text-white/60 text-xs mt-2">Remaining this month</p>
                   {allocation && (
@@ -218,7 +219,7 @@ export function DashboardClient({
               <CardContent className="p-5">
                 <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Net Worth</p>
                 <p className={cn("font-display text-3xl font-bold mt-1", netWorth >= 0 ? "text-success-600" : "text-destructive")}>
-                  {formatCurrency(netWorth, baseCurrency)}
+                  {formatCurrency(netWorth, displayCurrency)}
                 </p>
                 <p className="text-muted-foreground text-xs mt-2">Assets minus liabilities</p>
                 <div className="flex items-center gap-1 mt-3">
@@ -228,7 +229,7 @@ export function DashboardClient({
                     <TrendingDown className="h-3.5 w-3.5 text-destructive" />
                   )}
                   <span className="text-xs text-muted-foreground">
-                    {formatCurrency(totalAccountBalance, baseCurrency)} assets · {formatCurrency(totalDebt, baseCurrency)} debt
+                    {formatCurrency(totalAccountBalance, displayCurrency)} assets · {formatCurrency(totalDebt, displayCurrency)} debt
                   </span>
                 </div>
               </CardContent>
@@ -245,26 +246,26 @@ export function DashboardClient({
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Income</p>
                   <p className="text-xl font-bold text-success-600 mt-1">
-                    +{formatCurrency(monthlyIncome, baseCurrency)}
+                    +{formatCurrency(monthlyIncome, displayCurrency)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Expenses</p>
                   <p className="text-xl font-bold text-destructive mt-1">
-                    -{formatCurrency(monthlyExpenses, baseCurrency)}
+                    -{formatCurrency(monthlyExpenses, displayCurrency)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Net</p>
                   <p className={cn("text-xl font-bold mt-1", monthlyNet >= 0 ? "text-success-600" : "text-destructive")}>
-                    {formatCurrency(monthlyNet, baseCurrency)}
+                    {formatCurrency(monthlyNet, displayCurrency)}
                   </p>
                 </div>
               </div>
               {monthlySubTotal > 0 && (
                 <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
                   <RefreshCcw className="h-3 w-3 inline mr-1 opacity-60" />
-                  {formatCurrency(monthlySubTotal, baseCurrency)}/mo in recurring subscriptions ({activeSubscriptions.length} active)
+                  {formatCurrency(monthlySubTotal, displayCurrency)}/mo in recurring subscriptions ({activeSubscriptions.length} active)
                 </p>
               )}
             </CardContent>
@@ -292,7 +293,7 @@ export function DashboardClient({
                     <CartesianGrid strokeDasharray="3 3" stroke="#e8e0cc" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${sym}${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v) => formatCurrency(Number(v), baseCurrency)} />
+                    <Tooltip formatter={(v) => formatCurrency(Number(v), displayCurrency)} />
                     <Legend iconType="circle" iconSize={8} />
                     <Area type="monotone" dataKey="salary" stroke="#032e6d" strokeWidth={2} fill="url(#salGrad)" name="Salary" />
                     <Area type="monotone" dataKey="freelance" stroke="#28c095" strokeWidth={2} fill="url(#freGrad)" name="Freelance" />
@@ -319,7 +320,7 @@ export function DashboardClient({
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className="font-medium">{cat.name}</span>
                         <span className={cn("text-xs", over ? "text-destructive" : "text-muted-foreground")}>
-                          {formatCurrency(cat.spent, baseCurrency)} / {formatCurrency(cat.budget, baseCurrency)}
+                          {formatCurrency(cat.spent, displayCurrency)} / {formatCurrency(cat.budget, displayCurrency)}
                         </span>
                       </div>
                       <Progress
@@ -380,7 +381,7 @@ export function DashboardClient({
                         </div>
                       </div>
                       <span className={cn("font-semibold text-sm shrink-0", isIncome ? "text-success-600" : isExpense ? "text-destructive" : "text-foreground")}>
-                        {isExpense ? "-" : isIncome ? "+" : ""}{formatCurrency(tx.amount, tx.currency_code)}
+                        {isExpense ? "-" : isIncome ? "+" : ""}{formatCurrency(tx.amount, displayCurrency)}
                       </span>
                     </div>
                   );
@@ -410,7 +411,7 @@ export function DashboardClient({
                     <span className="text-sm truncate">{acc.name}</span>
                   </div>
                   <span className={cn("text-sm font-semibold shrink-0", acc.balance >= 0 ? "text-foreground" : "text-destructive")}>
-                    {formatCurrency(acc.balance, acc.currency_code)}
+                    {formatCurrency(acc.balance, displayCurrency)}
                   </span>
                 </div>
               ))}
@@ -419,7 +420,7 @@ export function DashboardClient({
               )}
               <div className="flex items-center justify-between pt-2.5 font-semibold text-sm">
                 <span>Total</span>
-                <span>{formatCurrency(totalAccountBalance, baseCurrency)}</span>
+                <span>{formatCurrency(totalAccountBalance, displayCurrency)}</span>
               </div>
             </CardContent>
           </Card>
@@ -457,7 +458,7 @@ export function DashboardClient({
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-xs text-muted-foreground">
-                          {formatCurrency(card.outstanding_balance, card.currency_code)} / {formatCurrency(card.credit_limit, card.currency_code)}
+                          {formatCurrency(card.outstanding_balance, displayCurrency)} / {formatCurrency(card.credit_limit, displayCurrency)}
                         </span>
                         {daysUntilDue !== null && (
                           <span className={cn("text-xs", daysUntilDue <= 3 ? "text-destructive font-medium" : daysUntilDue <= 7 ? "text-warning-700" : "text-muted-foreground")}>
@@ -497,7 +498,7 @@ export function DashboardClient({
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{plan.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCurrency(plan.current_amount, plan.currency_code)} / {formatCurrency(plan.target_amount, plan.currency_code)}
+                          {formatCurrency(plan.current_amount, displayCurrency)} / {formatCurrency(plan.target_amount, displayCurrency)}
                         </p>
                       </div>
                     </div>
@@ -529,7 +530,7 @@ export function DashboardClient({
                         <p className="text-xs text-muted-foreground">Due {formatDate(s.due_date)}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-semibold">{formatCurrency(s.minimum_payment ?? s.statement_balance, baseCurrency)}</p>
+                        <p className="text-sm font-semibold">{formatCurrency(s.minimum_payment ?? s.statement_balance, displayCurrency)}</p>
                         <p className={cn("text-xs", days <= 3 ? "text-destructive" : days <= 7 ? "text-warning-700" : "text-muted-foreground")}>
                           {days === 0 ? "Today" : days < 0 ? "Overdue" : `in ${days}d`}
                         </p>
@@ -547,7 +548,7 @@ export function DashboardClient({
                         <p className="text-xs text-muted-foreground">{sub.provider ?? sub.billing_cycle}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-semibold">{formatCurrency(sub.amount, sub.currency_code)}</p>
+                        <p className="text-sm font-semibold">{formatCurrency(sub.amount, displayCurrency)}</p>
                         <p className="text-xs text-muted-foreground">{days === 0 ? "Today" : `in ${days}d`}</p>
                       </div>
                     </div>
@@ -556,7 +557,7 @@ export function DashboardClient({
                 {monthlySubTotal > 0 && (
                   <div className="pt-2.5 flex items-center justify-between text-xs text-muted-foreground border-t border-border">
                     <span>{activeSubscriptions.length} recurring · monthly equiv.</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(monthlySubTotal, baseCurrency)}/mo</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(monthlySubTotal, displayCurrency)}/mo</span>
                   </div>
                 )}
               </CardContent>
@@ -578,13 +579,13 @@ export function DashboardClient({
                 {activeDebts.slice(0, 4).map((d) => (
                   <div key={d.id} className="flex items-center justify-between text-sm">
                     <span className="truncate max-w-[60%]">{d.name}</span>
-                    <span className="font-semibold text-destructive">{formatCurrency(d.current_balance, d.currency_code)}</span>
+                    <span className="font-semibold text-destructive">{formatCurrency(d.current_balance, displayCurrency)}</span>
                   </div>
                 ))}
                 <Separator />
                 <div className="flex items-center justify-between font-semibold text-sm">
                   <span>Total debt</span>
-                  <span className="text-destructive">{formatCurrency(totalDebt, baseCurrency)}</span>
+                  <span className="text-destructive">{formatCurrency(totalDebt, displayCurrency)}</span>
                 </div>
               </CardContent>
             </Card>

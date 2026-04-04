@@ -8,7 +8,7 @@ export default async function AccountsPage() {
 
   const [{ data: accounts }, { data: profile }] = await Promise.all([
     supabase.from("accounts").select("*").eq("user_id", user!.id).eq("is_active", true).order("type").order("name"),
-    supabase.from("profiles").select("base_currency, plan, plan_expires_at").eq("id", user!.id).single(),
+    supabase.from("profiles").select("plan, plan_expires_at").eq("id", user!.id).single(),
   ]);
 
   const isPro = isProSubscriber(profile);
@@ -18,7 +18,6 @@ export default async function AccountsPage() {
   return (
     <AccountsPageClient
       initialAccounts={accounts ?? []}
-      baseCurrency={profile?.base_currency ?? "PHP"}
       isPro={isPro}
       canAddAccount={canAddAccount}
       accountLimit={FREE_TIER_ACCOUNT_LIMIT}

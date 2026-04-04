@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/paymongo";
+import { logError } from "@/lib/logger";
 
 // PayMongo webhook — receives payment events and activates Pro on the user profile.
 // Register this URL once in your PayMongo dashboard under Developers > Webhooks:
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
-    console.error("[paymongo/webhook] PAYMONGO_WEBHOOK_SECRET is not set");
+    logError("paymongo/webhook", "PAYMONGO_WEBHOOK_SECRET is not set");
     return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
 
@@ -60,12 +61,19 @@ export async function POST(req: NextRequest) {
       .eq("id", userId);
 
     if (error) {
-      console.error("[paymongo/webhook] Failed to update profile:", error.message);
-      // Return 200 anyway to prevent PayMongo from retrying — log and investigate
+      logError("paymongo/webhook", "Failed to update profile after payment", {
+        userId,
+        code: error.code,
+        details: error.message,
+      });
+      // 503 so PayMongo retries; idempotent update is safe on duplicate deliveries
+      return NextResponse.json(
+        { error: "Profile update failed", received: false },
+        { status: 503 }
+      );
     }
   }
 
-  // Always return 200 to acknowledge receipt
   return NextResponse.json({ received: true });
 }
 

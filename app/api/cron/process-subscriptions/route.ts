@@ -23,12 +23,7 @@ export async function POST(req: NextRequest) {
   const totalTx = results.reduce((s, r) => s + r.transactions_created, 0);
   const skipped = results.filter((r) => r.skipped);
 
-  // After processing, generate fresh notifications for each affected user
-  const affectedUserIds = [...new Set(results.map((r) => r.subscription_id)
-    .flatMap(() => []))]; // placeholder — collect user IDs from results
-
-  // Generate for all users who had subscriptions processed
-  // We get user_ids from the subscriptions that were processed
+  // After processing, generate fresh notifications for each user who had new transactions.
   if (totalTx > 0) {
     const { data: processedSubs } = await supabase
       .from("subscriptions")

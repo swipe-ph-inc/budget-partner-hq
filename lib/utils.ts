@@ -25,6 +25,20 @@ export function formatCurrency(
   }
 }
 
+/** Narrow symbol for charts/labels (e.g. ₱, $). */
+export function getCurrencySymbol(currencyCode: string): string {
+  try {
+    const parts = new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: currencyCode,
+      currencyDisplay: "narrowSymbol",
+    }).formatToParts(0);
+    return parts.find((p) => p.type === "currency")?.value ?? currencyCode;
+  } catch {
+    return currencyCode;
+  }
+}
+
 // Format with symbol only
 export function formatAmount(
   amount: number,

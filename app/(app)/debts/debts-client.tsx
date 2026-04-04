@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, calcDebtFreeDate, cn } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
@@ -59,8 +60,7 @@ interface LedgerRow {
 function buildLedger(
   debts: Debt[],
   creditCards: CreditCard[],
-  instalments: InstalmentPlan[],
-  baseCurrency: string
+  instalments: InstalmentPlan[]
 ): LedgerRow[] {
   const rows: LedgerRow[] = [];
 
@@ -124,12 +124,11 @@ function buildLedger(
 function DTIGauge({
   totalMinPayments,
   avgMonthlyIncome,
-  baseCurrency,
 }: {
   totalMinPayments: number;
   avgMonthlyIncome: number;
-  baseCurrency: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const ratio = avgMonthlyIncome > 0 ? (totalMinPayments / avgMonthlyIncome) * 100 : 0;
   const capped = Math.min(100, ratio);
 
@@ -176,7 +175,7 @@ function DTIGauge({
           {ratio.toFixed(1)}%
         </span>
         <span className="text-sm text-muted-foreground">
-          {formatCurrency(totalMinPayments, baseCurrency)} / mo minimum payments
+          {formatCurrency(totalMinPayments, displayCurrency)} / mo minimum payments
         </span>
       </div>
       {avgMonthlyIncome === 0 && (
@@ -459,12 +458,11 @@ function DebtForm({
 function PayoffCalculator({
   debts,
   extraPayment,
-  baseCurrency,
 }: {
   debts: Debt[];
   extraPayment: number;
-  baseCurrency: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   function calcScenario(method: "current" | "snowball" | "avalanche") {
     if (debts.length === 0) return { date: null, interest: 0 };
 
@@ -544,7 +542,7 @@ function PayoffCalculator({
           <p className="text-xs text-muted-foreground mt-1">debt-free date</p>
           <Separator className="my-3" />
           <p className="text-sm font-semibold" style={{ color: s.color }}>
-            {formatCurrency(s.result.interest, baseCurrency)}
+            {formatCurrency(s.result.interest, displayCurrency)}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">total interest</p>
         </div>
@@ -555,6 +553,7 @@ function PayoffCalculator({
 
 // ---- Payment History Row ----
 function PaymentHistoryRow({ payments }: { payments: DebtPayment[] }) {
+  const displayCurrency = useDisplayCurrency();
   const [open, setOpen] = useState(false);
 
   if (payments.length === 0) return null;
@@ -576,14 +575,14 @@ function PaymentHistoryRow({ payments }: { payments: DebtPayment[] }) {
               className="flex items-center justify-between text-xs px-3 py-1.5 bg-secondary rounded"
             >
               <span className="text-foreground font-medium">
-                {formatCurrency(p.amount, "PHP")}
+                {formatCurrency(p.amount, displayCurrency)}
               </span>
               <div className="flex gap-3 text-muted-foreground">
                 {p.principal_portion != null && (
-                  <span>P: {formatCurrency(p.principal_portion, "PHP")}</span>
+                  <span>P: {formatCurrency(p.principal_portion, displayCurrency)}</span>
                 )}
                 {p.interest_portion != null && (
-                  <span>I: {formatCurrency(p.interest_portion, "PHP")}</span>
+                  <span>I: {formatCurrency(p.interest_portion, displayCurrency)}</span>
                 )}
                 <span>{formatDate(p.date)}</span>
               </div>
@@ -603,7 +602,6 @@ interface Props {
   instalmentPlans: InstalmentPlan[];
   debtStrategy: DebtStrategy | null;
   accounts: Account[];
-  baseCurrency: string;
   avgMonthlyIncome: number;
 }
 
@@ -614,16 +612,16 @@ export function DebtsPageClient({
   instalmentPlans,
   debtStrategy,
   accounts,
-  baseCurrency,
   avgMonthlyIncome,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | undefined>();
   const [extraPayment, setExtraPayment] = useState(
     debtStrategy?.extra_monthly_payment ?? 0
   );
 
-  const ledger = buildLedger(initialDebts, creditCards, instalmentPlans, baseCurrency);
+  const ledger = buildLedger(initialDebts, creditCards, instalmentPlans);
 
   const totalDebt = ledger.reduce((s, r) => s + r.balance, 0);
   const totalMinPayments = ledger.reduce((s, r) => s + (r.minPayment ?? 0), 0);
@@ -660,7 +658,7 @@ export function DebtsPageClient({
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">Total liabilities (Unified Debt Ledger)</p>
           <p className="mt-0.5 text-2xl font-display font-bold text-foreground sm:text-3xl">
-            {formatCurrency(totalDebt, baseCurrency)}
+            {formatCurrency(totalDebt, displayCurrency)}
           </p>
         </div>
         <Button onClick={openNew} className="w-full shrink-0 sm:w-auto">
@@ -704,14 +702,14 @@ export function DebtsPageClient({
                         <td className="px-4 py-3 font-medium text-foreground">{row.name}</td>
                         <td className="px-4 py-3 text-muted-foreground">{row.type}</td>
                         <td className="px-4 py-3 text-right font-semibold text-foreground">
-                          {formatCurrency(row.balance, row.currency)}
+                          {formatCurrency(row.balance, displayCurrency)}
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
                           {row.interestRate != null ? `${row.interestRate}%` : "—"}
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
                           {row.minPayment != null
-                            ? formatCurrency(row.minPayment, row.currency)
+                            ? formatCurrency(row.minPayment, displayCurrency)
                             : "—"}
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
@@ -747,7 +745,7 @@ export function DebtsPageClient({
                     TOTAL DEBT
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-foreground">
-                    {formatCurrency(totalDebt, baseCurrency)}
+                    {formatCurrency(totalDebt, displayCurrency)}
                   </td>
                   <td colSpan={4} />
                 </tr>
@@ -757,7 +755,7 @@ export function DebtsPageClient({
                   </td>
                   <td colSpan={2} />
                   <td className="px-4 py-3 text-right font-bold text-destructive">
-                    {formatCurrency(totalMinPayments, baseCurrency)}
+                    {formatCurrency(totalMinPayments, displayCurrency)}
                   </td>
                   <td colSpan={2} />
                 </tr>
@@ -771,7 +769,6 @@ export function DebtsPageClient({
       <DTIGauge
         totalMinPayments={totalMinPayments}
         avgMonthlyIncome={avgMonthlyIncome}
-        baseCurrency={baseCurrency}
       />
 
       {/* Debt Strategy */}
@@ -819,7 +816,7 @@ export function DebtsPageClient({
           <div className="flex items-center justify-between">
             <Label className="text-sm">Extra monthly payment</Label>
             <span className="text-sm font-semibold text-foreground">
-              {formatCurrency(extraPayment, baseCurrency)}
+              {formatCurrency(extraPayment, displayCurrency)}
             </span>
           </div>
           <input
@@ -832,8 +829,8 @@ export function DebtsPageClient({
             className="w-full accent-primary"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>₱0</span>
-            <span>₱50,000</span>
+            <span>{formatCurrency(0, displayCurrency)}</span>
+            <span>{formatCurrency(50000, displayCurrency)}</span>
           </div>
         </div>
       </div>
@@ -846,7 +843,6 @@ export function DebtsPageClient({
         <PayoffCalculator
           debts={initialDebts}
           extraPayment={extraPayment}
-          baseCurrency={baseCurrency}
         />
       </div>
 

@@ -27,7 +27,6 @@ export default async function SavingsPage() {
   const [
     { data: plans },
     { data: accounts },
-    { data: profile },
     { data: contributions },
   ] = await Promise.all([
     supabase
@@ -43,11 +42,6 @@ export default async function SavingsPage() {
       .eq("is_active", true)
       .order("name"),
     supabase
-      .from("profiles")
-      .select("base_currency")
-      .eq("id", user!.id)
-      .single(),
-    supabase
       .from("savings_contributions")
       .select("*")
       .order("date", { ascending: false }),
@@ -57,7 +51,6 @@ export default async function SavingsPage() {
     <SavingsPageClient
       initialPlans={plans ?? []}
       accounts={accounts ?? []}
-      baseCurrency={profile?.base_currency ?? "PHP"}
       initialContributions={contributions ?? []}
     />
   );

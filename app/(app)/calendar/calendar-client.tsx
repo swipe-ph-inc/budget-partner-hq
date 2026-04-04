@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { TX_TYPE_COLORS, TX_TYPE_LABELS, formatCurrency } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,13 +70,10 @@ function txLabel(tx: Transaction) {
   );
 }
 
-function txCurrency(tx: Transaction) {
-  return tx.accounts?.currency_code ?? "PHP";
-}
-
 // ----- sub-components --------------------------------------------------------
 
 function TxTooltipContent({ tx }: { tx: Transaction }) {
+  const displayCurrency = useDisplayCurrency();
   const colors = TX_TYPE_COLORS[tx.type] ?? TX_TYPE_COLORS.expense;
   const isNegative = ["expense", "credit_charge", "transfer"].includes(tx.type);
   const amount = tx.amount + (tx.fee_amount ?? 0);
@@ -95,7 +93,7 @@ function TxTooltipContent({ tx }: { tx: Transaction }) {
         </span>
         <span className={cn("text-sm font-bold", colors.text)}>
           {isNegative ? "−" : "+"}
-          {formatCurrency(amount, txCurrency(tx))}
+          {formatCurrency(amount, displayCurrency)}
         </span>
       </div>
 
@@ -134,7 +132,7 @@ function TxTooltipContent({ tx }: { tx: Transaction }) {
           <div className="flex items-center gap-1.5">
             <span className="opacity-60">Fee</span>
             <span className="font-medium text-foreground">
-              {formatCurrency(tx.fee_amount, txCurrency(tx))}
+              {formatCurrency(tx.fee_amount, displayCurrency)}
             </span>
           </div>
         )}
@@ -149,6 +147,7 @@ function TxTooltipContent({ tx }: { tx: Transaction }) {
 }
 
 function TxChip({ tx, compact = false }: { tx: Transaction; compact?: boolean }) {
+  const displayCurrency = useDisplayCurrency();
   const colors = TX_TYPE_COLORS[tx.type] ?? TX_TYPE_COLORS.expense;
   const isNegative = ["expense", "credit_charge", "transfer"].includes(tx.type);
   const amount = tx.amount + (tx.fee_amount ?? 0);
@@ -168,7 +167,7 @@ function TxChip({ tx, compact = false }: { tx: Transaction; compact?: boolean })
           {!compact && (
             <span className="shrink-0 font-semibold">
               {isNegative ? "-" : "+"}
-              {formatCurrency(amount, txCurrency(tx))}
+              {formatCurrency(amount, displayCurrency)}
             </span>
           )}
         </div>
@@ -181,6 +180,7 @@ function TxChip({ tx, compact = false }: { tx: Transaction; compact?: boolean })
 }
 
 function TxRow({ tx }: { tx: Transaction }) {
+  const displayCurrency = useDisplayCurrency();
   const colors = TX_TYPE_COLORS[tx.type] ?? TX_TYPE_COLORS.expense;
   const isNegative = ["expense", "credit_charge", "transfer"].includes(tx.type);
   const amount = tx.amount + (tx.fee_amount ?? 0);
@@ -207,7 +207,7 @@ function TxRow({ tx }: { tx: Transaction }) {
         {tx.note && <p className="text-xs text-muted-foreground/70 truncate">{tx.note}</p>}
       </div>
       <span className={cn("text-sm font-semibold shrink-0", colors.text)}>
-        {isNegative ? "-" : "+"}{formatCurrency(amount, txCurrency(tx))}
+        {isNegative ? "-" : "+"}{formatCurrency(amount, displayCurrency)}
       </span>
     </div>
   );
@@ -363,6 +363,7 @@ function DayView({
   todayStr: string;
   txByDate: Record<string, Transaction[]>;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const key = dateKey(anchorDate);
   const txs = txByDate[key] ?? [];
   const isToday = key === todayStr;
@@ -402,11 +403,11 @@ function DayView({
           <div className="ml-auto flex gap-4 text-right">
             <div>
               <p className="text-xs text-muted-foreground">In</p>
-              <p className="text-sm font-semibold text-success-600">+{formatCurrency(totalIn, "PHP")}</p>
+              <p className="text-sm font-semibold text-success-600">+{formatCurrency(totalIn, displayCurrency)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Out</p>
-              <p className="text-sm font-semibold text-destructive">-{formatCurrency(totalOut, "PHP")}</p>
+              <p className="text-sm font-semibold text-destructive">-{formatCurrency(totalOut, displayCurrency)}</p>
             </div>
           </div>
         )}
@@ -439,6 +440,7 @@ function YearView({
   txByDate: Record<string, Transaction[]>;
   onNavigate: (date: string, view: View) => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const year = anchorDate.getFullYear();
 
   return (
@@ -509,7 +511,7 @@ function YearView({
                               <div key={tx.id} className="flex items-center justify-between gap-2 text-xs">
                                 <span className={cn("truncate", c.text)}>{txLabel(tx)}</span>
                                 <span className={cn("shrink-0 font-semibold", c.text)}>
-                                  {neg ? "−" : "+"}{formatCurrency(tx.amount, txCurrency(tx))}
+                                  {neg ? "−" : "+"}{formatCurrency(tx.amount, displayCurrency)}
                                 </span>
                               </div>
                             );

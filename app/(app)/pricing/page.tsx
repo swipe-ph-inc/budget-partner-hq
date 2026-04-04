@@ -14,10 +14,21 @@ export default async function PricingPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  if (!user) {
+    return (
+      <PricingPageClient
+        currentPlan="free"
+        isPro={false}
+        planInterval={null}
+        isSignedIn={false}
+      />
+    );
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("plan, plan_expires_at, plan_interval")
-    .eq("id", user!.id)
+    .eq("id", user.id)
     .single();
 
   const isPro = isProSubscriber(profile);
@@ -28,6 +39,7 @@ export default async function PricingPage() {
       currentPlan={profile?.plan ?? "free"}
       isPro={isPro}
       planInterval={interval}
+      isSignedIn
     />
   );
 }

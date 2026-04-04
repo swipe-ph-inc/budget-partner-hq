@@ -34,7 +34,7 @@ export default async function DashboardPage() {
     supabase.from("subscriptions").select("*").eq("user_id", user.id).eq("status", "active").order("next_billing_date").limit(10),
     supabase.from("debts").select("*").eq("user_id", user.id).eq("status", "active"),
     supabase.from("financial_health_snapshots").select("*").eq("user_id", user.id).order("snapshot_date", { ascending: false }).limit(1).single(),
-    supabase.from("profiles").select("base_currency, display_name").eq("id", user.id).single(),
+    supabase.from("profiles").select("display_name").eq("id", user.id).single(),
     supabase.from("monthly_allocations").select("*, items:allocation_items(*)").eq("user_id", user.id).eq("month", currentMonthStart).order("created_at", { ascending: false }).limit(1).single(),
     supabase.from("credit_card_statements").select("*, credit_card:credit_cards(name, user_id)").gte("due_date", today).lte("due_date", thirtyDaysOut).eq("is_paid", false).order("due_date"),
     supabase.from("categories").select("id, name, color, budget_amount").eq("user_id", user.id),
@@ -92,7 +92,6 @@ export default async function DashboardPage() {
       activeSubscriptions={activeSubscriptions ?? []}
       activeDebts={activeDebts ?? []}
       healthSnapshot={healthSnapshot ?? null}
-      baseCurrency={profile?.base_currency ?? "PHP"}
       displayName={profile?.display_name ?? ""}
       allocation={allocation ?? null}
       upcomingDueDates={userStatements}

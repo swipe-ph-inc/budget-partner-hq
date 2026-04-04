@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import {
   sanitizeMoneyInputNonNegative,
   formatMoneyInputDisplay,
@@ -411,6 +412,7 @@ function SubscriptionRow({
   accounts: Account[];
   onEdit: (s: Subscription) => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -454,7 +456,7 @@ function SubscriptionRow({
           <span className="text-xs text-muted-foreground">{paymentLabel}</span>
           {sub.fee_amount > 0 && (
             <span className="text-xs text-muted-foreground">
-              + {formatCurrency(sub.fee_amount, sub.currency_code)} fee
+              + {formatCurrency(sub.fee_amount, displayCurrency)} fee
             </span>
           )}
         </div>
@@ -463,7 +465,7 @@ function SubscriptionRow({
       {/* Amount */}
       <div className="text-right shrink-0">
         <p className="font-semibold text-sm text-foreground">
-          {formatCurrency(sub.amount, sub.currency_code)}
+          {formatCurrency(sub.amount, displayCurrency)}
         </p>
         <p className="text-xs text-muted-foreground">
           {sub.next_billing_date ? (
@@ -554,7 +556,6 @@ interface Props {
   creditCards: CreditCard[];
   accounts: Account[];
   categories: Category[];
-  baseCurrency: string;
 }
 
 export function SubscriptionsPageClient({
@@ -562,8 +563,8 @@ export function SubscriptionsPageClient({
   creditCards,
   accounts,
   categories,
-  baseCurrency,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | undefined>();
   const [processing, setProcessing] = useState(false);
@@ -641,7 +642,7 @@ export function SubscriptionsPageClient({
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">Monthly subscription spend</p>
           <p className="mt-0.5 text-2xl font-display font-bold text-foreground sm:text-3xl">
-            {formatCurrency(totalMonthly, baseCurrency)}
+            {formatCurrency(totalMonthly, displayCurrency)}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:shrink-0">

@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
@@ -98,6 +99,7 @@ function InvoiceForm({
   onSuccess: () => void;
   onClose: () => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const year = new Date().getFullYear();
   const nextNum = existingInvoices.length + 1;
   const defaultNumber = `BPHQ-${year}-${String(nextNum).padStart(3, "0")}`;
@@ -390,7 +392,7 @@ function InvoiceForm({
                 </div>
                 {/* Line total (shown below on mobile-ish via hidden col) */}
                 <div className="col-span-11 col-start-2 text-right text-xs text-muted-foreground -mt-1">
-                  {formatCurrency(lineTotal, currency)}
+                  {formatCurrency(lineTotal, displayCurrency)}
                 </div>
               </div>
             );
@@ -405,7 +407,7 @@ function InvoiceForm({
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
           <span className="font-medium text-foreground">
-            {formatCurrency(subtotal, currency)}
+            {formatCurrency(subtotal, displayCurrency)}
           </span>
         </div>
         <div className="flex items-center justify-between text-sm gap-4">
@@ -420,7 +422,7 @@ function InvoiceForm({
             className="w-24 text-right"
           />
           <span className="font-medium text-foreground shrink-0">
-            {formatCurrency(taxAmount, currency)}
+            {formatCurrency(taxAmount, displayCurrency)}
           </span>
         </div>
         <div className="flex items-center justify-between text-sm gap-4">
@@ -434,14 +436,14 @@ function InvoiceForm({
             className="w-24 text-right"
           />
           <span className="font-medium text-destructive shrink-0">
-            -{formatCurrency(discount, currency)}
+            -{formatCurrency(discount, displayCurrency)}
           </span>
         </div>
         <Separator />
         <div className="flex justify-between">
           <span className="font-bold text-foreground">Total</span>
           <span className="text-2xl font-display font-bold text-primary">
-            {formatCurrency(grandTotal, currency)}
+            {formatCurrency(grandTotal, displayCurrency)}
           </span>
         </div>
       </div>
@@ -480,6 +482,7 @@ function RecordPaymentDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [amount, setAmount] = useState(
     String(invoice.total ?? 0)
   );
@@ -530,7 +533,7 @@ function RecordPaymentDialog({
           </div>
           <div className="text-sm text-muted-foreground">
             Invoice total: <span className="font-semibold text-foreground">
-              {formatCurrency(invoice.total ?? 0, invoice.currency_code)}
+              {formatCurrency(invoice.total ?? 0, displayCurrency)}
             </span>
           </div>
           <Button type="submit" disabled={loading} className="w-full">
@@ -550,6 +553,7 @@ function InvoiceRow({
   invoice: Invoice;
   onEdit: (inv: Invoice) => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
@@ -588,7 +592,7 @@ function InvoiceRow({
         {/* Amount */}
         <div className="text-right shrink-0">
           <p className="font-semibold text-sm text-foreground">
-            {formatCurrency(invoice.total ?? 0, invoice.currency_code)}
+            {formatCurrency(invoice.total ?? 0, displayCurrency)}
           </p>
           <Badge
             variant={STATUS_BADGE_VARIANT[displayStatus]}
@@ -672,14 +676,13 @@ function InvoiceRow({
 interface Props {
   initialInvoices: Invoice[];
   initialLineItems: LineItem[];
-  baseCurrency: string;
 }
 
 export function InvoicesPageClient({
   initialInvoices,
   initialLineItems,
-  baseCurrency,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>();
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -739,14 +742,14 @@ export function InvoicesPageClient({
           <div className="mt-0.5 flex flex-wrap items-baseline gap-4 sm:gap-6">
             <div>
               <p className="text-3xl font-display font-bold text-foreground">
-                {formatCurrency(totalOutstanding, baseCurrency)}
+                {formatCurrency(totalOutstanding, displayCurrency)}
               </p>
               <p className="text-xs text-muted-foreground">outstanding</p>
             </div>
             <div className="h-8 w-px bg-border" />
             <div>
               <p className="text-lg font-display font-bold text-success">
-                {formatCurrency(totalPaid, baseCurrency)}
+                {formatCurrency(totalPaid, displayCurrency)}
               </p>
               <p className="text-xs text-muted-foreground">collected</p>
             </div>

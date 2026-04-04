@@ -5,14 +5,18 @@ import { cn } from "@/lib/utils";
 import Sidebar from "@/components/layout/sidebar";
 import Topbar from "@/components/layout/topbar";
 import { AIChatButton } from "@/components/chat/ai-chat-button";
+import { DisplayCurrencyProvider } from "@/components/providers/display-currency-provider";
 
 export function AppShell({
   children,
   isPro,
+  baseCurrency,
 }: {
   children: React.ReactNode;
   /** Pro / active paid plan — unlocks AI chat and premium areas. */
   isPro: boolean;
+  /** Profile base currency — all money amounts in the app shell format with this symbol (no FX conversion). */
+  baseCurrency: string;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   /** Kept in sync with sidebar width: expanded `w-60` → `ml-60`, collapsed `w-16` → `ml-16`. */
@@ -44,7 +48,9 @@ export function AppShell({
         )}
       >
         <Topbar onMenuClick={() => setMobileNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <DisplayCurrencyProvider baseCurrency={baseCurrency}>{children}</DisplayCurrencyProvider>
+        </main>
       </div>
 
       <AIChatButton aiEnabled={isPro} />

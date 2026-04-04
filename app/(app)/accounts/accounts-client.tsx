@@ -23,6 +23,7 @@ import type { Database } from "@/types/database";
 import { AccountDeleteDialog } from "@/components/accounts/account-delete-dialog";
 import { Separator } from "@/components/ui/separator";
 import { currencySelectOptions } from "@/lib/currencies";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 
 type Account = Database["public"]["Tables"]["accounts"]["Row"];
 
@@ -78,12 +79,11 @@ async function applyBalanceChange(
 function AccountCard({
   account,
   onEdit,
-  baseCurrency,
 }: {
   account: Account;
   onEdit: (a: Account) => void;
-  baseCurrency: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const typeInfo = ACCOUNT_TYPES.find((t) => t.value === account.type);
   const Icon = typeInfo?.icon ?? Landmark;
 
@@ -115,7 +115,7 @@ function AccountCard({
 
         <div className="mt-4">
           <p className={cn("font-display text-xl font-bold", account.balance >= 0 ? "text-foreground" : "text-destructive")}>
-            {formatCurrency(account.balance, baseCurrency)}
+            {formatCurrency(account.balance, displayCurrency)}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge variant={account.type === "savings" ? "success" : account.type === "checking" ? "default" : "secondary"} className="text-xs">
@@ -152,19 +152,18 @@ function AccountForm({
   onClose,
   canAddAccount,
   accountLimit,
-  baseCurrency,
 }: {
   account?: Account;
   onSuccess: () => void;
   onClose: () => void;
   canAddAccount: boolean;
   accountLimit: number;
-  baseCurrency: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [name, setName] = useState(account?.name ?? "");
   const [type, setType] = useState(account?.type ?? "savings");
   const [institution, setInstitution] = useState(account?.institution ?? "");
-  const [currency, setCurrency] = useState(account?.currency_code ?? baseCurrency);
+  const [currency, setCurrency] = useState(account?.currency_code ?? displayCurrency);
   const currencyOptions = useMemo(() => currencySelectOptions(currency), [currency]);
   const [color, setColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
   const [notes, setNotes] = useState(account?.notes ?? "");
@@ -184,8 +183,8 @@ function AccountForm({
   }, [account]);
 
   useEffect(() => {
-    if (!account) setCurrency(baseCurrency);
-  }, [baseCurrency, account]);
+    if (!account) setCurrency(displayCurrency);
+  }, [displayCurrency, account]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -414,7 +413,6 @@ function AccountForm({
 
 interface Props {
   initialAccounts: Account[];
-  baseCurrency: string;
   isPro: boolean;
   canAddAccount: boolean;
   accountLimit: number;
@@ -422,11 +420,11 @@ interface Props {
 
 export function AccountsPageClient({
   initialAccounts,
-  baseCurrency,
   isPro,
   canAddAccount,
   accountLimit,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const [accounts, setAccounts] = useState(initialAccounts);
 
   useEffect(() => {
@@ -466,7 +464,7 @@ export function AccountsPageClient({
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">Total across all accounts</p>
           <p className="mt-0.5 text-2xl font-display font-bold text-foreground sm:text-3xl">
-            {formatCurrency(totalBalance, baseCurrency)}
+            {formatCurrency(totalBalance, displayCurrency)}
           </p>
         </div>
         <Button
@@ -515,7 +513,7 @@ export function AccountsPageClient({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {group.accounts.map((account) => (
-                <AccountCard key={account.id} account={account} onEdit={openEdit} baseCurrency={baseCurrency} />
+                <AccountCard key={account.id} account={account} onEdit={openEdit} />
               ))}
             </div>
           </section>
@@ -538,7 +536,6 @@ export function AccountsPageClient({
               onClose={() => setSheetOpen(false)}
               canAddAccount={canAddAccount || !!editingAccount}
               accountLimit={accountLimit}
-              baseCurrency={baseCurrency}
             />
           </div>
         </SheetContent>

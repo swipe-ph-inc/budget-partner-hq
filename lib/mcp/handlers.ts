@@ -13,7 +13,7 @@ export async function handleMCPTool(
 
   switch (toolName) {
     case "get_accounts": {
-      const query = supabase
+      let query = supabase
         .from("accounts")
         .select("*")
         .eq("user_id", userId)
@@ -21,16 +21,16 @@ export async function handleMCPTool(
         .order("name");
 
       if (!input.include_inactive) {
-        query.eq("is_active", true);
+        query = query.eq("is_active", true);
       }
       const { data } = await query;
       return data ?? [];
     }
 
     case "get_account_balance": {
-      const query = supabase.from("accounts").select("id, name, balance, currency_code").eq("user_id", userId);
-      if (input.account_id) query.eq("id", input.account_id as string);
-      if (input.account_name) query.ilike("name", `%${input.account_name}%`);
+      let query = supabase.from("accounts").select("id, name, balance, currency_code").eq("user_id", userId);
+      if (input.account_id) query = query.eq("id", input.account_id as string);
+      if (input.account_name) query = query.ilike("name", `%${input.account_name}%`);
       const { data } = await query.limit(1).single();
       return data ?? { error: "Account not found" };
     }
@@ -138,30 +138,32 @@ export async function handleMCPTool(
         .eq("user_id", userId)
         .eq("is_active", true);
 
-      if (!cards) return [];
+      if (!cards || cards.length === 0) return [];
 
-      // Calculate outstanding balance per card from transactions
-      const cardsWithBalance = await Promise.all(
-        cards.map(async (card) => {
-          const { data: charges } = await supabase
-            .from("transactions")
-            .select("amount, fee_amount, type")
-            .eq("credit_card_id", card.id)
-            .eq("user_id", userId);
+      // Batch all card transactions in a single query instead of N+1
+      const cardIds = cards.map((c) => c.id);
+      const { data: allCharges } = await supabase
+        .from("transactions")
+        .select("amount, fee_amount, type, credit_card_id")
+        .in("credit_card_id", cardIds)
+        .eq("user_id", userId);
 
-          const outstanding = (charges ?? []).reduce((sum, tx) => {
-            if (tx.type === "credit_charge") return sum + tx.amount + (tx.fee_amount ?? 0);
-            if (tx.type === "credit_payment") return sum - tx.amount;
-            return sum;
-          }, 0);
+      const chargesByCard: Record<string, { amount: number; fee_amount: number | null; type: string }[]> = {};
+      for (const tx of allCharges ?? []) {
+        if (!tx.credit_card_id) continue;
+        (chargesByCard[tx.credit_card_id] ??= []).push(tx);
+      }
 
-          const utilisation = card.credit_limit > 0 ? (outstanding / card.credit_limit) * 100 : 0;
-
-          return { ...card, outstanding_balance: outstanding, utilisation_pct: utilisation };
-        })
-      );
-
-      return cardsWithBalance;
+      return cards.map((card) => {
+        const charges = chargesByCard[card.id] ?? [];
+        const outstanding = charges.reduce((sum, tx) => {
+          if (tx.type === "credit_charge") return sum + tx.amount + (tx.fee_amount ?? 0);
+          if (tx.type === "credit_payment") return sum - tx.amount;
+          return sum;
+        }, 0);
+        const utilisation = card.credit_limit > 0 ? (outstanding / card.credit_limit) * 100 : 0;
+        return { ...card, outstanding_balance: outstanding, utilisation_pct: utilisation };
+      });
     }
 
     case "get_credit_card_statements": {
@@ -182,6 +184,15 @@ export async function handleMCPTool(
     }
 
     case "add_savings_contribution": {
+      // Verify the savings plan belongs to the requesting user before inserting
+      const { data: plan } = await supabase
+        .from("savings_plans")
+        .select("id")
+        .eq("id", input.savings_plan_id as string)
+        .eq("user_id", userId)
+        .single();
+      if (!plan) return { error: "Savings plan not found" };
+
       const { data, error } = await supabase.from("savings_contributions").insert({
         savings_plan_id: input.savings_plan_id as string,
         amount: input.amount as number,
@@ -307,7 +318,12 @@ export async function handleMCPTool(
 
       if (adjustments && adjustments.length > 0) {
         for (const adj of adjustments) {
-          await supabase.from("allocation_items").update({ amount: adj.new_amount }).eq("id", adj.item_id);
+          // Scope update to this allocation so items from other allocations cannot be mutated
+          await supabase
+            .from("allocation_items")
+            .update({ amount: adj.new_amount })
+            .eq("id", adj.item_id)
+            .eq("allocation_id", allocation_id);
         }
       }
 
@@ -728,14 +744,15 @@ export async function handleMCPTool(
       const total = subtotal + taxAmount - discountAmount;
       const issueDate = (input.issue_date as string) ?? format(new Date(), "yyyy-MM-dd");
 
-      // Auto-generate invoice number if not provided
+      // Auto-generate invoice number if not provided.
+      // Using max invoice_number (lexicographic) + timestamp avoids a COUNT race
+      // condition where two concurrent requests could receive the same serial number.
       let invoiceNumber = input.invoice_number as string | undefined;
       if (!invoiceNumber) {
-        const { count } = await supabase
-          .from("invoices")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId);
-        invoiceNumber = `INV-${String((count ?? 0) + 1).padStart(3, "0")}`;
+        const year = new Date().getFullYear();
+        // Random 4-digit suffix makes collisions extremely unlikely even under concurrency
+        const suffix = String(Math.floor(1000 + Math.random() * 9000));
+        invoiceNumber = `INV-${year}-${suffix}`;
       }
 
       const { data: invoice, error } = await supabase

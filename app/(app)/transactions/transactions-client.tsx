@@ -45,6 +45,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
 import Papa from "papaparse";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 
 type Transaction = Database["public"]["Tables"]["transactions"]["Row"] & {
   accounts: { name: string; currency_code: string } | null;
@@ -91,6 +92,7 @@ export function AmountDisplay({
 }: {
   tx: Transaction;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const colorClass =
     tx.type === "income"
       ? "text-success"
@@ -105,7 +107,7 @@ export function AmountDisplay({
   return (
     <span className={cn("font-mono font-semibold text-sm tabular-nums", colorClass)}>
       {tx.type === "income" ? "+" : tx.type === "expense" || tx.type === "credit_charge" ? "-" : ""}
-      {formatCurrency(tx.amount, tx.currency_code)}
+      {formatCurrency(tx.amount, displayCurrency)}
       {tx.fee_amount > 0 && (
         <span className="text-xs text-muted-foreground ml-1">(+fee)</span>
       )}
@@ -136,10 +138,11 @@ export function TransactionForm({
   defaultCurrency?: string;
   initialType?: TxType;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [type, setType] = useState<TxType>(initialType ?? "expense");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [currency, setCurrency] = useState(defaultCurrency ?? "PHP");
+  const [currency, setCurrency] = useState(defaultCurrency ?? displayCurrency);
   const [incomeType, setIncomeType] = useState<"salary" | "freelance" | "other">("salary");
   const [isCollected, setIsCollected] = useState(true);
   const [fromAccountId, setFromAccountId] = useState("__none__");
@@ -159,7 +162,8 @@ export function TransactionForm({
 
   useEffect(() => {
     if (defaultCurrency) setCurrency(defaultCurrency);
-  }, [defaultCurrency]);
+    else setCurrency(displayCurrency);
+  }, [defaultCurrency, displayCurrency]);
 
   useEffect(() => {
     if (!contextAccountId) return;
@@ -565,7 +569,6 @@ interface Props {
   isPro: boolean;
   /** Inclusive YYYY-MM-DD — free tier only loads from this date onward. */
   freeHistoryMinDate?: string;
-  baseCurrency: string;
 }
 
 const PAGE_SIZE = 50;
@@ -578,7 +581,6 @@ export function TransactionsPageClient({
   creditCards,
   isPro,
   freeHistoryMinDate,
-  baseCurrency,
 }: Props) {
   const router = useRouter();
 
@@ -867,7 +869,6 @@ export function TransactionsPageClient({
               creditCards={creditCards}
               onSuccess={() => setSheetOpen(false)}
               onClose={() => setSheetOpen(false)}
-              defaultCurrency={baseCurrency}
             />
           </div>
         </SheetContent>

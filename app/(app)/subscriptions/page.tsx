@@ -12,7 +12,6 @@ export default async function SubscriptionsPage() {
     { data: creditCards },
     { data: accounts },
     { data: categories },
-    { data: profile },
   ] = await Promise.all([
     supabase
       .from("subscriptions")
@@ -37,11 +36,6 @@ export default async function SubscriptionsPage() {
       .select("id, name")
       .eq("user_id", user!.id)
       .order("name"),
-    supabase
-      .from("profiles")
-      .select("base_currency")
-      .eq("id", user!.id)
-      .single(),
   ]);
 
   return (
@@ -50,7 +44,6 @@ export default async function SubscriptionsPage() {
       creditCards={creditCards ?? []}
       accounts={accounts ?? []}
       categories={categories ?? []}
-      baseCurrency={profile?.base_currency ?? "PHP"}
     />
   );
 }

@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Database } from "@/types/database";
 import { currencySelectOptions } from "@/lib/currencies";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 
 type CreditCardRow = Database["public"]["Tables"]["credit_cards"]["Row"];
 type CardWithBalance = CreditCardRow & { outstanding_balance: number };
@@ -118,12 +119,11 @@ function isOverdue(paymentDueDay: number | null): boolean {
 function CardTile({
   card,
   onEdit,
-  baseCurrency,
 }: {
   card: CardWithBalance;
   onEdit: (c: CardWithBalance) => void;
-  baseCurrency: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const utilisationPct =
     card.credit_limit > 0
       ? (card.outstanding_balance / card.credit_limit) * 100
@@ -169,13 +169,13 @@ function CardTile({
           <div>
             <p className="text-xs opacity-60">Outstanding</p>
             <p className="font-semibold text-sm mt-0.5">
-              {formatCurrency(card.outstanding_balance, baseCurrency)}
+              {formatCurrency(card.outstanding_balance, displayCurrency)}
             </p>
           </div>
           <div>
             <p className="text-xs opacity-60">Credit limit</p>
             <p className="font-semibold text-sm mt-0.5">
-              {formatCurrency(card.credit_limit, baseCurrency)}
+              {formatCurrency(card.credit_limit, displayCurrency)}
             </p>
           </div>
         </div>
@@ -259,15 +259,14 @@ function CardForm({
   onClose,
   canAddCard,
   cardLimit,
-  baseCurrency,
 }: {
   card?: CardWithBalance;
   onSuccess: () => void;
   onClose: () => void;
   canAddCard: boolean;
   cardLimit: number;
-  baseCurrency: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const isNew = !card;
 
   const [name, setName] = useState(card?.name ?? "");
@@ -278,7 +277,7 @@ function CardForm({
   const [creditLimit, setCreditLimit] = useState(
     card?.credit_limit ? toDisplayAmount(card.credit_limit.toString()) : ""
   );
-  const [currency, setCurrency] = useState(card?.currency_code ?? baseCurrency);
+  const [currency, setCurrency] = useState(card?.currency_code ?? displayCurrency);
   const currencyOptions = useMemo(() => currencySelectOptions(currency), [currency]);
   const [billingCycleStartDay, setBillingCycleStartDay] = useState(
     card?.billing_cycle_start_day?.toString() ?? "1"
@@ -301,8 +300,8 @@ function CardForm({
   const router = useRouter();
 
   useEffect(() => {
-    if (!card) setCurrency(baseCurrency);
-  }, [baseCurrency, card]);
+    if (!card) setCurrency(displayCurrency);
+  }, [displayCurrency, card]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -481,7 +480,7 @@ function CardForm({
         <div className="rounded-lg bg-secondary/60 border border-border px-4 py-3 space-y-0.5">
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Current outstanding balance</p>
           <p className="text-lg font-bold text-destructive">
-            {formatCurrency(card.outstanding_balance, baseCurrency)}
+            {formatCurrency(card.outstanding_balance, displayCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
             Computed from your transaction history. Log a payment to reduce it.
@@ -585,7 +584,6 @@ interface Props {
   isPro: boolean;
   canAddCard: boolean;
   cardLimit: number;
-  baseCurrency: string;
 }
 
 export function CreditCardsPageClient({
@@ -593,8 +591,8 @@ export function CreditCardsPageClient({
   isPro,
   canAddCard,
   cardLimit,
-  baseCurrency,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CardWithBalance | undefined>();
 
@@ -654,7 +652,7 @@ export function CreditCardsPageClient({
               Total Outstanding
             </p>
             <p className="text-2xl font-display font-bold text-destructive mt-1">
-              {formatCurrency(totalOutstanding, baseCurrency)}
+              {formatCurrency(totalOutstanding, displayCurrency)}
             </p>
           </div>
           <div className="bg-card border border-border rounded-xl p-4">
@@ -662,7 +660,7 @@ export function CreditCardsPageClient({
               Total Credit Limit
             </p>
             <p className="text-2xl font-display font-bold text-foreground mt-1">
-              {formatCurrency(totalLimit, baseCurrency)}
+              {formatCurrency(totalLimit, displayCurrency)}
             </p>
           </div>
           <div className="bg-card border border-border rounded-xl p-4 col-span-2 sm:col-span-1">
@@ -694,7 +692,7 @@ export function CreditCardsPageClient({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {initialCards.map((card) => (
-            <CardTile key={card.id} card={card} onEdit={openEdit} baseCurrency={baseCurrency} />
+            <CardTile key={card.id} card={card} onEdit={openEdit} />
           ))}
         </div>
       )}
@@ -718,7 +716,6 @@ export function CreditCardsPageClient({
               onClose={() => setSheetOpen(false)}
               canAddCard={canAddCard || !!editingCard}
               cardLimit={cardLimit}
-              baseCurrency={baseCurrency}
             />
           </div>
         </SheetContent>

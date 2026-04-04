@@ -108,10 +108,13 @@ export function PricingPageClient({
   currentPlan,
   isPro,
   planInterval,
+  isSignedIn,
 }: {
   currentPlan: "free" | "pro";
   isPro: boolean;
   planInterval: "monthly" | "annual" | null;
+  /** When false, plan actions redirect to login (public pricing page). */
+  isSignedIn: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -120,6 +123,7 @@ export function PricingPageClient({
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- one-shot banner from ?payment= before router.replace clears query */
     const payment = searchParams.get("payment");
     if (payment === "success") {
       setMessage({ type: "ok", text: "Payment received! Your Pro plan will activate shortly." });
@@ -128,6 +132,7 @@ export function PricingPageClient({
       setMessage({ type: "err", text: "Payment was cancelled. No charges were made." });
       router.replace("/pricing");
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [searchParams, router]);
 
   const isCurrentFree = currentPlan === "free";
@@ -135,6 +140,10 @@ export function PricingPageClient({
   const isCurrentAnnual = isPro && planInterval === "annual";
 
   function run(id: SelectablePlanId) {
+    if (!isSignedIn) {
+      router.push(`/login?redirect=${encodeURIComponent("/pricing")}`);
+      return;
+    }
     setMessage(null);
     setPendingId(id);
     startTransition(async () => {

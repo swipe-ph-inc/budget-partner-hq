@@ -1,6 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
+import {
+  isPublicPath,
+  shouldRedirectAuthenticatedUserToDashboard,
+} from "@/lib/auth/public-paths";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -32,17 +36,13 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Public routes
-  const publicRoutes = ["/login", "/signup", "/auth/callback", "/forgot-password"];
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
-
-  if (!user && !isPublicRoute) {
+  if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicRoute) {
+  if (user && shouldRedirectAuthenticatedUserToDashboard(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const PAYMONGO_BASE = "https://api.paymongo.com/v1";
 
@@ -91,5 +91,11 @@ export function verifyWebhookSignature(
 
   // In live mode use "li"; fall back to "te" for test mode
   const sig = parts["li"] || parts["te"];
-  return !!sig && sig === expected;
+  if (!sig) return false;
+  try {
+    // Use constant-time comparison to prevent timing attacks
+    return timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex"));
+  } catch {
+    return false;
+  }
 }

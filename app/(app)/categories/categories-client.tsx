@@ -41,7 +41,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { cn, initials } from "@/lib/utils";
+import { cn, initials, formatCurrency } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
@@ -522,6 +523,7 @@ function CategoryNode({
   onEdit: (c: Category) => void;
   onDelete: (c: Category) => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -568,7 +570,7 @@ function CategoryNode({
           </div>
           {category.budget_amount && (
             <p className="text-xs text-muted-foreground mt-0.5">
-              Budget: ₱{category.budget_amount.toLocaleString()}/mo
+              Budget: {formatCurrency(category.budget_amount, displayCurrency)}/mo
             </p>
           )}
         </div>

@@ -30,6 +30,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatCurrency, formatDate, formatPercent, utilColour, TX_TYPE_LABELS, TX_TYPE_COLORS } from "@/lib/utils";
+import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -101,6 +102,7 @@ function AmortisationTable({
   interestRate: number;
   startMonth: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const rows = useMemo(() => {
     const totalInterest = totalAmount * (interestRate / 100);
     const totalWithInterest = totalAmount + totalInterest;
@@ -152,16 +154,16 @@ function AmortisationTable({
               <tr key={row.month} className="hover:bg-secondary/30">
                 <td className="py-1.5 px-3 whitespace-nowrap">{row.month}</td>
                 <td className="py-1.5 px-3 font-mono">
-                  {formatCurrency(row.payment, "PHP")}
+                  {formatCurrency(row.payment, displayCurrency)}
                 </td>
                 <td className="py-1.5 px-3 font-mono text-warning-700">
-                  {formatCurrency(row.interest, "PHP")}
+                  {formatCurrency(row.interest, displayCurrency)}
                 </td>
                 <td className="py-1.5 px-3 font-mono text-success">
-                  {formatCurrency(row.principal, "PHP")}
+                  {formatCurrency(row.principal, displayCurrency)}
                 </td>
                 <td className="py-1.5 px-3 font-mono">
-                  {formatCurrency(row.balance, "PHP")}
+                  {formatCurrency(row.balance, displayCurrency)}
                 </td>
               </tr>
             ))}
@@ -200,6 +202,7 @@ function PaymentDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [amount, setAmount] = useState(
     toDisplayAmount(card.outstanding_balance.toFixed(2))
   );
@@ -295,7 +298,7 @@ function PaymentDialog({
         <div className="rounded-xl p-4 text-white" style={{ background: card.color ?? "#032e6d" }}>
           <p className="text-xs opacity-70 uppercase tracking-wide font-medium">Outstanding balance</p>
           <p className="text-2xl font-bold mt-1">
-            {formatCurrency(card.outstanding_balance, card.currency_code)}
+            {formatCurrency(card.outstanding_balance, displayCurrency)}
           </p>
           {card.credit_limit > 0 && (
             <p className="text-xs opacity-60 mt-1">
@@ -319,7 +322,7 @@ function PaymentDialog({
                   >
                     {q.label}
                     <span className="ml-1.5 text-muted-foreground">
-                      {formatCurrency(q.value, card.currency_code)}
+                      {formatCurrency(q.value, displayCurrency)}
                     </span>
                   </button>
                 ))}
@@ -352,7 +355,7 @@ function PaymentDialog({
                   <SelectItem key={acc.id} value={acc.id}>
                     <span>{acc.name}</span>
                     <span className="ml-2 text-muted-foreground text-xs">
-                      {formatCurrency(acc.balance, acc.currency_code)}
+                      {formatCurrency(acc.balance, displayCurrency)}
                     </span>
                   </SelectItem>
                 ))}
@@ -415,6 +418,7 @@ function CreateInstalmentDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [description, setDescription] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [months, setMonths] = useState("12");
@@ -543,19 +547,19 @@ function CreateInstalmentDialog({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Monthly payment</span>
                 <span className="font-semibold">
-                  {formatCurrency(monthlyAmount, currency)}
+                  {formatCurrency(monthlyAmount, displayCurrency)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total interest</span>
                 <span className="text-warning-700 font-semibold">
-                  {formatCurrency(totalInterest, currency)}
+                  {formatCurrency(totalInterest, displayCurrency)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total cost</span>
                 <span className="font-bold text-foreground">
-                  {formatCurrency(totalWithInterest, currency)}
+                  {formatCurrency(totalWithInterest, displayCurrency)}
                 </span>
               </div>
             </div>
@@ -608,6 +612,7 @@ export function CreditCardDetailClient({
   transactions,
   instalmentPlans,
 }: Props) {
+  const displayCurrency = useDisplayCurrency();
   const [instalmentOpen, setInstalmentOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
 
@@ -674,13 +679,13 @@ export function CreditCardDetailClient({
           <div>
             <p className="text-xs opacity-60">Outstanding</p>
             <p className="font-bold text-xl mt-0.5">
-              {formatCurrency(card.outstanding_balance, card.currency_code)}
+              {formatCurrency(card.outstanding_balance, displayCurrency)}
             </p>
           </div>
           <div>
             <p className="text-xs opacity-60">Credit limit</p>
             <p className="font-bold text-xl mt-0.5">
-              {formatCurrency(card.credit_limit, card.currency_code)}
+              {formatCurrency(card.credit_limit, displayCurrency)}
             </p>
           </div>
           <div>
@@ -688,7 +693,7 @@ export function CreditCardDetailClient({
             <p className="font-bold text-xl mt-0.5">
               {formatCurrency(
                 Math.max(0, card.credit_limit - card.outstanding_balance),
-                card.currency_code
+                displayCurrency
               )}
             </p>
           </div>
@@ -747,7 +752,7 @@ export function CreditCardDetailClient({
               {card.min_payment_type === "percentage"
                 ? `${card.min_payment_value ?? 0}%`
                 : card.min_payment_value
-                ? formatCurrency(card.min_payment_value, card.currency_code)
+                ? formatCurrency(card.min_payment_value, displayCurrency)
                 : "—"}
             </p>
           </div>
@@ -799,15 +804,15 @@ export function CreditCardDetailClient({
                           {formatDate(s.period_end, "MMM d, yyyy")}
                         </td>
                         <td className="py-3 px-4 font-mono font-semibold">
-                          {formatCurrency(s.statement_balance, card.currency_code)}
+                          {formatCurrency(s.statement_balance, displayCurrency)}
                         </td>
                         <td className="py-3 px-4 font-mono text-muted-foreground">
                           {s.minimum_payment
-                            ? formatCurrency(s.minimum_payment, card.currency_code)
+                            ? formatCurrency(s.minimum_payment, displayCurrency)
                             : "—"}
                         </td>
                         <td className="py-3 px-4 font-mono text-success">
-                          {formatCurrency(s.paid_amount, card.currency_code)}
+                          {formatCurrency(s.paid_amount, displayCurrency)}
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap text-muted-foreground">
                           {formatDate(s.due_date, "MMM d, yyyy")}
@@ -904,7 +909,7 @@ export function CreditCardDetailClient({
                               )}
                             >
                               {tx.type === "credit_charge" ? "-" : "+"}
-                              {formatCurrency(tx.amount, tx.currency_code)}
+                              {formatCurrency(tx.amount, displayCurrency)}
                             </span>
                           </td>
                         </tr>
@@ -981,7 +986,7 @@ export function CreditCardDetailClient({
                           Total amount
                         </p>
                         <p className="font-semibold text-foreground mt-1">
-                          {formatCurrency(plan.total_amount, plan.currency_code)}
+                          {formatCurrency(plan.total_amount, displayCurrency)}
                         </p>
                       </div>
                       <div>
@@ -989,7 +994,7 @@ export function CreditCardDetailClient({
                           Monthly
                         </p>
                         <p className="font-semibold text-foreground mt-1">
-                          {formatCurrency(plan.monthly_amount, plan.currency_code)}
+                          {formatCurrency(plan.monthly_amount, displayCurrency)}
                         </p>
                       </div>
                       <div>
@@ -1005,7 +1010,7 @@ export function CreditCardDetailClient({
                           Total interest
                         </p>
                         <p className="font-semibold text-warning-700 mt-1">
-                          {formatCurrency(totalInterestCost, plan.currency_code)}
+                          {formatCurrency(totalInterestCost, displayCurrency)}
                         </p>
                       </div>
                     </div>

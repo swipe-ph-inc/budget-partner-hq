@@ -10,9 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev       # Start development server
 npm run build     # Production build
 npm run lint      # Run ESLint
+npm run test      # Vitest (unit tests)
+npm run lint:ci   # ESLint on CI-scoped paths (see package.json); full `npm run lint` still reports legacy issues elsewhere
 ```
 
-No test suite is configured. Build verification: `npm run build`.
+CI: GitHub Actions (`.github/workflows/ci.yml`) runs `lint:ci`, test, and build on push/PR. Build verification: `npm run build`.
 
 ## Environment Variables
 
@@ -23,16 +25,20 @@ Required in `.env.local` (see `.env.example`):
 - `OPEN_ROUTER_API_KEY` — OpenRouter (required when `AI_PROVIDER=openrouter`)
 - `OPEN_ROUTER_MODEL` — Optional; defaults to `openai/gpt-4o-mini`
 - `ANTHROPIC_API_KEY` — Direct Anthropic API (when `AI_PROVIDER=anthropic`)
-- `NEXT_PUBLIC_APP_URL` — App base URL
+- `NEXT_PUBLIC_APP_URL` — App base URL (also used for `metadataBase`, sitemap, robots)
 - `CRON_SECRET` — Protects `/api/cron/*` routes from unauthorized calls
+- `PAYMONGO_SECRET_KEY` / `PAYMONGO_WEBHOOK_SECRET` — Hosted checkout and webhook (see `app/api/paymongo/*`)
+- Optional **Upstash** for AI rate limits: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — when unset, `/api/ai/chat` is not Redis-throttled (fine for local dev; set in production)
 
 ## Architecture
 
 **Next.js 16 App Router** with two route groups:
-- `app/(auth)/` — Public pages: login, signup, forgot-password, auth/callback
-- `app/(app)/` — Protected pages: dashboard, accounts, transactions, credit-cards, debts, savings, subscriptions, expenses, invoices, categories, profile, calendar, pricing
+- `app/(auth)/` — Auth flows: login, signup, forgot-password, auth/callback
+- `app/(app)/` — Signed-in app: dashboard, accounts, transactions, credit-cards, debts, savings, subscriptions, expenses, invoices, categories, profile, calendar, pricing
 
-**Auth:** Supabase Auth (email/password + Google OAuth). Middleware in `lib/supabase/middleware.ts` enforces route protection. Server-side clients use `@supabase/ssr` cookie handling. Row Level Security (`auth.uid() = user_id`) is enforced at the DB level on every table — no client-side auth checks needed.
+**Public marketing & legal** (no login): `/` (landing), `/pricing`, `/terms`, `/refund-policy`, `/robots.txt`, `/sitemap.xml`, `/favicon_io/*` — allowlist in `lib/auth/public-paths.ts`, applied from `proxy.ts` via `lib/supabase/middleware.ts` (`updateSession`).
+
+**Auth:** Supabase Auth (email/password + Google OAuth). Next.js 16 uses **`proxy.ts`** (not `middleware.ts`) calling `updateSession` for cookies and redirects. Server-side clients use `@supabase/ssr` cookie handling. Row Level Security (`auth.uid() = user_id`) is enforced at the DB level on every table — no client-side auth checks needed for data access.
 
 **Page pattern:** Every protected page is a Server Component that fetches data and passes it to a `*-client.tsx` Client Component for interactivity. Server components use `lib/supabase/server.ts`; client components use `lib/supabase/client.ts`. All `(app)/` routes export `dynamic = "force-dynamic"` (set once on the layout).
 
@@ -42,7 +48,7 @@ Required in `.env.local` (see `.env.example`):
 - `lib/plans.ts` exports pricing constants (`PRO_MONTHLY_PRICE_USD = 9.99`, 17% annual discount) and formatters.
 - `app/(app)/layout.tsx` fetches `isPro` once and passes it to `<AppShell isPro={isPro}>`, which forwards it to `<Sidebar>`. The Sidebar shows a lock icon on Pro-only routes (`/calendar`, `/savings`, `/debts`, `/invoices`) for free users.
 - Pro-only pages check `isProSubscriber` server-side and render `<UpgradePrompt>` for free users instead of the page content.
-- The `selectPlan` Server Action in `app/(app)/pricing/actions.ts` writes plan changes directly to `profiles` (no payment processor yet).
+- **Billing:** `createPaymongoCheckout` in `app/(app)/pricing/actions.ts` starts PayMongo hosted checkout; `app/api/paymongo/webhook/route.ts` activates Pro on `checkout_session.payment.paid`. `downgradeTofree` sets the user back to Free. No direct “select plan” write without payment for upgrades.
 - DB-level enforcement via `is_pro_subscriber(uuid)` SQL function + RLS policies on `accounts` and `credit_cards` insert (free users capped at 3 active each).
 
 **AI integration:** `app/api/ai/chat/route.ts` runs an agentic loop with MCP tools. Deployment defaults: `AI_PROVIDER` (OpenRouter vs Anthropic) and `OPEN_ROUTER_MODEL` / `ANTHROPIC_MODEL`. **Per-user overrides** live on `prompt_settings.ai_provider` and `prompt_settings.ai_model` (null = use deployment defaults); users edit these under **Profile → AI Settings**. Resolution: `lib/ai/resolve-user-llm.ts`. Tool execution: `lib/mcp/handlers.ts`. System prompt: `lib/ai/system-prompt.ts` and optional `system_prompts` DB row.

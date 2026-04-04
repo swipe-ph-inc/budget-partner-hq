@@ -2,6 +2,7 @@
 
 import type { Components } from "react-markdown";
 import Markdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
@@ -86,7 +87,11 @@ export function AssistantMessageContent({ content }: { content: string }) {
 
   return (
     <div className="assistant-md text-sm leading-relaxed text-foreground [&_p]:text-foreground">
-      <Markdown remarkPlugins={[remarkGfm]} components={components}>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeSanitize]}
+        components={components}
+      >
         {content}
       </Markdown>
     </div>

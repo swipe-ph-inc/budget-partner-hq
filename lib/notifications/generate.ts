@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logError } from "@/lib/logger";
 import { formatCurrency } from "@/lib/utils";
 
 export interface NotificationRow {
@@ -35,6 +36,7 @@ export async function generateNotificationsForUser(
 
   // ── Fetch all data in parallel ─────────────────────────────────────────────
   const [
+    { data: profileRow },
     { data: subs },
     { data: cards },
     { data: categories },
@@ -43,6 +45,7 @@ export async function generateNotificationsForUser(
     { data: savingsPlans },
     { data: snapshot },
   ] = await Promise.all([
+    supabase.from("profiles").select("base_currency").eq("id", userId).single(),
     supabase
       .from("subscriptions")
       .select("id, name, amount, currency_code, next_billing_date")
@@ -92,6 +95,8 @@ export async function generateNotificationsForUser(
       .single(),
   ]);
 
+  const displayCurrency = profileRow?.base_currency ?? "PHP";
+
   // Instalment plans need card IDs — fetch after the parallel block
   const cardIds = (cards ?? []).map((c) => c.id);
   const { data: instalmentPlans } = cardIds.length > 0
@@ -112,8 +117,8 @@ export async function generateNotificationsForUser(
       type: "subscription_due",
       title: daysOver > 0 ? `${sub.name} payment overdue` : `${sub.name} is due today`,
       body: daysOver > 0
-        ? `${formatCurrency(sub.amount, sub.currency_code)} — ${daysOver}d overdue`
-        : formatCurrency(sub.amount, sub.currency_code),
+        ? `${formatCurrency(sub.amount, displayCurrency)} — ${daysOver}d overdue`
+        : formatCurrency(sub.amount, displayCurrency),
       link: "/subscriptions",
       deduplication_key: `subscription_due:${sub.id}:${todayStr}`,
     });
@@ -145,7 +150,7 @@ export async function generateNotificationsForUser(
         title: overdue
           ? `${card.name} payment is overdue`
           : `${card.name} payment due in ${daysUntil}d`,
-        body: `Outstanding: ${formatCurrency(outstanding, card.currency_code)}`,
+        body: `Outstanding: ${formatCurrency(outstanding, displayCurrency)}`,
         link: `/credit-cards/${card.id}`,
         deduplication_key: `credit_card_due:${card.id}:${monthKey}`,
       });
@@ -169,7 +174,7 @@ export async function generateNotificationsForUser(
         user_id: userId,
         type: "budget_overspent",
         title: `${cat.name} budget exceeded`,
-        body: `Over by ${formatCurrency(overage, "PHP")} this month`,
+        body: `Over by ${formatCurrency(overage, displayCurrency)} this month`,
         link: "/categories",
         deduplication_key: `budget_overspent:${cat.id}:${monthKey}`,
       });
@@ -187,7 +192,7 @@ export async function generateNotificationsForUser(
           user_id: userId,
           type: "savings_milestone",
           title: m === 100 ? `${plan.name} goal reached!` : `${plan.name} is ${m}% funded`,
-          body: `${formatCurrency(plan.current_amount, plan.currency_code)} of ${formatCurrency(plan.target_amount, plan.currency_code)}`,
+          body: `${formatCurrency(plan.current_amount, displayCurrency)} of ${formatCurrency(plan.target_amount, displayCurrency)}`,
           link: "/savings",
           deduplication_key: `savings_milestone:${plan.id}:${m}`,
         });
@@ -233,7 +238,6 @@ export async function generateNotificationsForUser(
     lastMonthStart.setMonth(lastMonthStart.getMonth() + plan.months - 1);
 
     const card = (cards ?? []).find((c) => c.id === plan.credit_card_id);
-    const currency = plan.currency_code ?? card?.currency_code ?? "PHP";
     const cardLink = card ? `/credit-cards/${card.id}` : "/credit-cards";
 
     // Plan hasn't started yet — skip
@@ -245,7 +249,7 @@ export async function generateNotificationsForUser(
         user_id: userId,
         type: "instalment_complete",
         title: `${plan.description} is fully paid`,
-        body: `All ${plan.months} monthly payments of ${formatCurrency(plan.monthly_amount, currency)} are done`,
+        body: `All ${plan.months} monthly payments of ${formatCurrency(plan.monthly_amount, displayCurrency)} are done`,
         link: cardLink,
         deduplication_key: `instalment_complete:${plan.id}`,
       });
@@ -269,8 +273,8 @@ export async function generateNotificationsForUser(
         ? `Final payment for ${plan.description}`
         : `${plan.description} instalment due this month`,
       body: isLastMonth
-        ? `Last payment of ${formatCurrency(plan.monthly_amount, currency)} — you're almost done!`
-        : `${formatCurrency(plan.monthly_amount, currency)}/mo · ${monthsRemaining} payment${monthsRemaining !== 1 ? "s" : ""} remaining`,
+        ? `Last payment of ${formatCurrency(plan.monthly_amount, displayCurrency)} — you're almost done!`
+        : `${formatCurrency(plan.monthly_amount, displayCurrency)}/mo · ${monthsRemaining} payment${monthsRemaining !== 1 ? "s" : ""} remaining`,
       link: cardLink,
       deduplication_key: `instalment_due:${plan.id}:${monthKey}`,
     });
@@ -286,7 +290,9 @@ export async function generateNotificationsForUser(
       ignoreDuplicates: true,
     });
 
-  if (error) console.error("[notifications] upsert error:", error.message);
+  if (error) {
+    logError("notifications/generate", "upsert error", { message: error.message });
+  }
 
   return notifications.length;
 }

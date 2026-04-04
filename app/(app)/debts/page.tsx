@@ -31,7 +31,6 @@ export default async function DebtsPage() {
     { data: instalmentPlans },
     { data: debtStrategy },
     { data: accounts },
-    { data: profile },
     { data: healthSnapshot },
   ] = await Promise.all([
     supabase
@@ -65,11 +64,6 @@ export default async function DebtsPage() {
       .eq("is_active", true)
       .order("name"),
     supabase
-      .from("profiles")
-      .select("base_currency")
-      .eq("id", user!.id)
-      .single(),
-    supabase
       .from("financial_health_snapshots")
       .select("avg_monthly_salary, avg_monthly_freelance")
       .eq("user_id", user!.id)
@@ -90,7 +84,6 @@ export default async function DebtsPage() {
       instalmentPlans={instalmentPlans ?? []}
       debtStrategy={debtStrategy ?? null}
       accounts={accounts ?? []}
-      baseCurrency={profile?.base_currency ?? "PHP"}
       avgMonthlyIncome={avgMonthlyIncome}
     />
   );

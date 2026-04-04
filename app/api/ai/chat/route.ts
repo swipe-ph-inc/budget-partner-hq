@@ -11,6 +11,8 @@ import {
   getOpenRouterChatCompletionsUrl,
 } from "@/lib/ai/ai-provider-config";
 import { assertModelMatchesProvider, resolveUserLlm } from "@/lib/ai/resolve-user-llm";
+import { chatPostBodySchema } from "@/lib/ai/chat-body-schema";
+import { rateLimitAiChat } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -22,15 +24,33 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
-  const body = await request.json();
-  const { messages: clientMessages } = body as { messages: MessageParam[] };
+  const rate = await rateLimitAiChat(user.id);
+  if (!rate.success) {
+    return new Response(JSON.stringify({ error: "Too many requests. Try again later." }), {
+      status: 429,
+      headers: { "Content-Type": "application/json", "Retry-After": "3600" },
+    });
+  }
 
-  if (!Array.isArray(clientMessages) || clientMessages.length === 0) {
-    return new Response(JSON.stringify({ error: "Missing or empty messages." }), {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  const parsed = chatPostBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return new Response(
+      JSON.stringify({ error: "Invalid messages.", details: parsed.error.flatten() }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const clientMessages = parsed.data.messages as MessageParam[];
 
   const [{ data: profile }, { data: systemPromptRow }, { data: assistantPrimerRow }] =
     await Promise.all([

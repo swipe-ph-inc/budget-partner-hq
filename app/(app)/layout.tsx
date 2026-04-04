@@ -13,17 +13,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   } = await supabase.auth.getUser();
 
   let isPro = false;
+  let baseCurrency = "PHP";
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("plan, plan_expires_at")
+      .select("plan, plan_expires_at, base_currency")
       .eq("id", user.id)
       .single();
     isPro = isProSubscriber(profile);
+    baseCurrency = profile?.base_currency ?? "PHP";
   }
 
   return (
-    <AppShell isPro={isPro}>
+    <AppShell isPro={isPro} baseCurrency={baseCurrency}>
       {children}
     </AppShell>
   );

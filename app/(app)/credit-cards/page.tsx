@@ -15,7 +15,7 @@ export default async function CreditCardsPage() {
       .eq("user_id", user!.id)
       .eq("is_active", true)
       .order("name"),
-    supabase.from("profiles").select("plan, plan_expires_at, base_currency").eq("id", user!.id).single(),
+    supabase.from("profiles").select("plan, plan_expires_at").eq("id", user!.id).single(),
   ]);
 
   const isPro = isProSubscriber(profile);
@@ -56,7 +56,6 @@ export default async function CreditCardsPage() {
       isPro={isPro}
       canAddCard={canAddCard}
       cardLimit={FREE_TIER_CREDIT_CARD_LIMIT}
-      baseCurrency={profile?.base_currency ?? "PHP"}
     />
   );
 }

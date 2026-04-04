@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,17 @@ function GoogleIcon() {
   );
 }
 
-export default function LoginPage() {
+function safeRedirectPath(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  return raw;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+  const afterLogin = safeRedirectPath(redirectParam);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,7 +61,7 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      router.push(afterLogin);
       router.refresh();
     }
   }
@@ -62,10 +71,11 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
+    const next = encodeURIComponent(afterLogin);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${next}`,
       },
     });
 
@@ -163,7 +173,14 @@ export default function LoginPage() {
 
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-primary font-medium hover:underline">
+        <Link
+          href={
+            redirectParam
+              ? `/signup?redirect=${encodeURIComponent(redirectParam)}`
+              : "/signup"
+          }
+          className="text-primary font-medium hover:underline"
+        >
           Create one
         </Link>
       </p>
@@ -177,5 +194,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

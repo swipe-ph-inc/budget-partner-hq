@@ -75,7 +75,14 @@ export async function POST(request: NextRequest) {
         id,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Internal error";
+      // Do not leak internal DB error details (table names, constraints, etc.) to the client
+      const raw = err instanceof Error ? err.message : "";
+      const isInternalDbError =
+        raw.includes("supabase") ||
+        raw.includes("PostgreSQL") ||
+        raw.includes("duplicate key") ||
+        raw.includes("violates");
+      const message = isInternalDbError ? "An internal error occurred." : (raw || "Internal error");
       return NextResponse.json({
         jsonrpc: "2.0",
         error: { code: -32603, message },
@@ -92,9 +99,21 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({
-    name: "Budget Partner HQ MCP Server",
-    version: "1.0.0",
-    tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
-  });
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return NextResponse.json(
+    {
+      name: "Budget Partner HQ MCP Server",
+      version: "1.0.0",
+      tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

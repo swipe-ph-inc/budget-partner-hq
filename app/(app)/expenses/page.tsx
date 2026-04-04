@@ -16,7 +16,7 @@ export default async function ExpensesPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("plan, plan_expires_at, base_currency")
+    .select("plan, plan_expires_at")
     .eq("id", user!.id)
     .single();
 
@@ -76,7 +76,6 @@ export default async function ExpensesPage() {
       creditCards={creditCards ?? []}
       isPro={isPro}
       freeHistoryMinDate={!isPro ? historyStart : undefined}
-      baseCurrency={profile?.base_currency ?? "PHP"}
     />
   );
 }
