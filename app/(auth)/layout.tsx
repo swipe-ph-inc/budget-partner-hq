@@ -1,6 +1,9 @@
 import React from "react";
 import Image from "next/image";
 
+const MARKETING_SITE_URL =
+  process.env.NEXT_PUBLIC_MARKETING_URL ?? "https://www.budgetpartnerhq.com";
+
 export default function AuthLayout({
   children,
 }: {
@@ -16,14 +19,20 @@ export default function AuthLayout({
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-white/3" />
 
         <div className="relative z-10">
-          <Image
-            src="/bp_logo.png"
-            alt="Budget Partner HQ"
-            width={240}
-            height={80}
-            className="h-16 w-auto max-w-[min(100%,14rem)] object-contain object-left"
-            priority
-          />
+          <a
+            href={MARKETING_SITE_URL}
+            className="inline-block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+            aria-label="Budget Partner HQ — visit marketing site"
+          >
+            <Image
+              src="/bp_logo.png"
+              alt="Budget Partner HQ"
+              width={240}
+              height={80}
+              className="h-16 w-auto max-w-[min(100%,14rem)] object-contain object-left"
+              priority
+            />
+          </a>
         </div>
 
         <div className="relative z-10 space-y-6">
@@ -55,14 +64,20 @@ export default function AuthLayout({
       {/* Right panel — form */}
       <div className="flex flex-1 flex-col items-center justify-center bg-background p-6 sm:p-8">
         <div className="mb-8 flex justify-center lg:hidden">
-          <Image
-            src="/bp_logo.png"
-            alt="Budget Partner HQ"
-            width={200}
-            height={72}
-            className="h-14 w-auto object-contain"
-            priority
-          />
+          <a
+            href={MARKETING_SITE_URL}
+            className="inline-block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Budget Partner HQ — visit marketing site"
+          >
+            <Image
+              src="/bp_logo.png"
+              alt="Budget Partner HQ"
+              width={200}
+              height={72}
+              className="h-14 w-auto object-contain"
+              priority
+            />
+          </a>
         </div>
         <div className="w-full max-w-md">{children}</div>
       </div>
