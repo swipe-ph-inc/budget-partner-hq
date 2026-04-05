@@ -9,6 +9,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import { ReceiptScanner, type ParsedReceipt } from "@/components/receipts/receipt-scanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -91,6 +92,42 @@ export function ExpenseForm({
     return merchants.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 8);
   }, [merchants, merchantSearch]);
 
+  function handleReceiptParsed(parsed: ParsedReceipt, url: string | null) {
+    if (parsed.amount != null) setAmount(String(parsed.amount));
+    if (parsed.date) setDate(parsed.date);
+    if (parsed.currency && CURRENCIES.includes(parsed.currency)) setCurrency(parsed.currency);
+    if (parsed.description) setDescription(parsed.description);
+    if (url) setAttachmentUrl(url);
+
+    // Switch payment method if receipt indicates card
+    if (parsed.type === "credit_charge") setPaymentMethod("credit_card");
+
+    // Match merchant by name (case-insensitive)
+    if (parsed.merchant) {
+      const match = merchants.find(
+        (m) => m.name.toLowerCase() === parsed.merchant!.toLowerCase()
+      );
+      if (match) {
+        setMerchantId(match.id);
+        setMerchantSearch(match.name);
+      } else {
+        setMerchantSearch(parsed.merchant);
+        setMerchantId("__none__");
+      }
+    }
+
+    // Match category by hint
+    if (parsed.category_hint) {
+      const hint = parsed.category_hint.toLowerCase();
+      const match = categories.find(
+        (c) =>
+          c.name.toLowerCase().includes(hint) ||
+          hint.includes(c.name.toLowerCase())
+      );
+      if (match) setCategoryId(match.id);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -143,6 +180,9 @@ export function ExpenseForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Receipt scanner */}
+      <ReceiptScanner onParsed={handleReceiptParsed} />
+
       {/* Date + amount */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">

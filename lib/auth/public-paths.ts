@@ -17,6 +17,7 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
   "/forgot-password",
+  "/auth/google",
   "/auth/callback",
   "/api/paymongo/webhook",
   "/api/cron/",

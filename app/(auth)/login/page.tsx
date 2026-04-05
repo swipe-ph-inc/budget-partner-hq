@@ -46,8 +46,14 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  // Show errors from the OAuth callback redirect (?error=auth_callback_failed)
+  const callbackError = searchParams.get("error");
+  const [error, setError] = useState<string | null>(
+    callbackError === "auth_callback_failed"
+      ? "Google sign-in failed. Please try again."
+      : null
+  );
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -66,25 +72,7 @@ function LoginForm() {
     }
   }
 
-  async function handleGoogleLogin() {
-    setGoogleLoading(true);
-    setError(null);
-
-    const supabase = createClient();
-    const next = encodeURIComponent(afterLogin);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${next}`,
-      },
-    });
-
-    if (error) {
-      setError(error.message);
-      setGoogleLoading(false);
-    }
-    // On success, Supabase redirects the browser to Google — no further action needed.
-  }
+  const googleHref = `/auth/google?next=${encodeURIComponent(afterLogin)}`;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -97,21 +85,25 @@ function LoginForm() {
         </p>
       </div>
 
-      {/* Google OAuth */}
+      {/* Google OAuth — use a real navigation (/auth/google) so iPad/Safari WebKit does not block post-async redirects */}
       <Button
-        type="button"
+        asChild
         variant="outline"
         size="lg"
         className="w-full gap-2 border-border bg-white hover:bg-gray-50 text-foreground"
-        onClick={handleGoogleLogin}
-        disabled={googleLoading || loading}
       >
-        {googleLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
+        <Link
+          href={googleHref}
+          aria-disabled={loading}
+          className={loading ? "pointer-events-none opacity-50" : undefined}
+          onClick={(e) => {
+            if (loading) e.preventDefault();
+            else setError(null);
+          }}
+        >
           <GoogleIcon />
-        )}
-        {googleLoading ? "Redirecting…" : "Continue with Google"}
+          Continue with Google
+        </Link>
       </Button>
 
       {/* Divider */}
@@ -165,7 +157,7 @@ function LoginForm() {
           </div>
         )}
 
-        <Button type="submit" className="w-full" size="lg" disabled={loading || googleLoading}>
+        <Button type="submit" className="w-full" size="lg" disabled={loading}>
           {loading && <Loader2 className="animate-spin" />}
           {loading ? "Signing in…" : "Sign in"}
         </Button>

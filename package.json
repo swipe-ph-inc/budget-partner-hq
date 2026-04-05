@@ -9,7 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint",
-    "lint:ci": "eslint lib/auth/public-paths.ts lib/logger.ts lib/rate-limit.ts lib/ai/chat-body-schema.ts lib/supabase/middleware.ts lib/notifications/generate.ts \"app/api/**/*.ts\" app/error.tsx app/global-error.tsx app/robots.ts app/sitemap.ts next.config.ts vitest.config.ts proxy.ts components/chat/assistant-message-content.tsx \"app/(auth)/login/page.tsx\" \"app/(auth)/auth/callback/route.ts\" \"app/(app)/pricing/**/*.tsx\"",
+    "lint:ci": "eslint lib/auth/public-paths.ts lib/logger.ts lib/rate-limit.ts lib/ai/chat-body-schema.ts lib/supabase/middleware.ts lib/notifications/generate.ts \"app/api/**/*.ts\" app/error.tsx app/global-error.tsx app/robots.ts app/sitemap.ts next.config.ts vitest.config.ts proxy.ts components/chat/assistant-message-content.tsx \"app/(auth)/login/page.tsx\" \"app/(auth)/auth/callback/route.ts\" \"app/(auth)/auth/google/route.ts\" \"app/(app)/pricing/**/*.tsx\"",
     "db:seed": "supabase db query -f supabase/seed.sql",
     "db:seed:premium": "supabase db query -f supabase/seed_premium.sql"
   },

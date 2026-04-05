@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,33 +32,15 @@ function GoogleIcon() {
 }
 
 export default function SignupPage() {
-  const router = useRouter();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  async function handleGoogleSignup() {
-    setGoogleLoading(true);
-    setError(null);
-
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      setError(error.message);
-      setGoogleLoading(false);
-    }
-    // On success, Supabase redirects the browser to Google — no further action needed.
-  }
+  /** Same-origin link so OAuth starts with a real navigation (reliable on iPad/Safari). */
+  const googleHref = "/auth/google?next=%2Fdashboard";
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -118,19 +99,23 @@ export default function SignupPage() {
 
       {/* Google OAuth */}
       <Button
-        type="button"
+        asChild
         variant="outline"
         size="lg"
         className="w-full gap-2 border-border bg-white hover:bg-gray-50 text-foreground"
-        onClick={handleGoogleSignup}
-        disabled={googleLoading || loading}
       >
-        {googleLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
+        <Link
+          href={googleHref}
+          aria-disabled={loading}
+          className={loading ? "pointer-events-none opacity-50" : undefined}
+          onClick={(e) => {
+            if (loading) e.preventDefault();
+            else setError(null);
+          }}
+        >
           <GoogleIcon />
-        )}
-        {googleLoading ? "Redirecting…" : "Continue with Google"}
+          Continue with Google
+        </Link>
       </Button>
 
       {/* Divider */}
@@ -190,7 +175,7 @@ export default function SignupPage() {
           </div>
         )}
 
-        <Button type="submit" className="w-full" size="lg" disabled={loading || googleLoading}>
+        <Button type="submit" className="w-full" size="lg" disabled={loading}>
           {loading && <Loader2 className="animate-spin" />}
           {loading ? "Creating account…" : "Create account"}
         </Button>

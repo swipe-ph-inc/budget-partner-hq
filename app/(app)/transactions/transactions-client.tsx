@@ -8,6 +8,7 @@ import {
   ArrowRightLeft,
   AlertCircle,
 } from "lucide-react";
+import { ReceiptScanner, type ParsedReceipt } from "@/components/receipts/receipt-scanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -154,6 +155,7 @@ export function TransactionForm({
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [feeAmount, setFeeAmount] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -195,6 +197,37 @@ export function TransactionForm({
   /** On account detail, from/to is always this account — hide redundant pickers. */
   const showFromAccountPicker = needsFromAccount && !contextAccountId;
   const showIncomeDepositPicker = type === "income" && !contextAccountId;
+
+  function handleReceiptParsed(parsed: ParsedReceipt, url: string | null) {
+    if (parsed.type) setType(parsed.type);
+    if (parsed.amount != null) setAmount(String(parsed.amount));
+    if (parsed.date) setDate(parsed.date);
+    if (parsed.currency && CURRENCIES.includes(parsed.currency)) setCurrency(parsed.currency);
+    if (parsed.description) setDescription(parsed.description);
+    if (parsed.fee_amount != null) setFeeAmount(String(parsed.fee_amount));
+    if (url) setAttachmentUrl(url);
+
+    // Match merchant by name (case-insensitive)
+    if (parsed.merchant) {
+      const match = merchants.find(
+        (m) => m.name.toLowerCase() === parsed.merchant!.toLowerCase()
+      );
+      if (match) {
+        setMerchantId(match.id);
+        setMerchantSearch(match.name);
+      } else {
+        setMerchantSearch(parsed.merchant);
+        setMerchantId("__none__");
+      }
+    }
+
+    // Match category by hint (case-insensitive substring)
+    if (parsed.category_hint) {
+      const hint = parsed.category_hint.toLowerCase();
+      const match = categories.find((c) => c.name.toLowerCase().includes(hint) || hint.includes(c.name.toLowerCase()));
+      if (match) setCategoryId(match.id);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -246,6 +279,7 @@ export function TransactionForm({
       description: description || null,
       tags: tagArray.length > 0 ? tagArray : null,
       fee_amount: feeParsed,
+      attachment_url: attachmentUrl || null,
     };
 
     const { error: dbError } = await supabase.from("transactions").insert(payload);
@@ -262,6 +296,9 @@ export function TransactionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pb-4">
+      {/* Receipt scanner */}
+      <ReceiptScanner onParsed={handleReceiptParsed} />
+
       {/* Type */}
       <div className="space-y-2">
         <Label>Transaction type *</Label>

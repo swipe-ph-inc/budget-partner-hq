@@ -12,6 +12,7 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/signup")).toBe(true);
     expect(isPublicPath("/auth/callback")).toBe(true);
+    expect(isPublicPath("/auth/google")).toBe(true);
     expect(isPublicPath("/api/paymongo/webhook")).toBe(true);
     expect(isPublicPath("/api/cron/process-subscriptions")).toBe(true);
     expect(isPublicPath("/api/health")).toBe(true);
