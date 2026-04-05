@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -55,6 +55,16 @@ function LoginForm() {
       : null
   );
 
+  // Clean the ?error= param from the URL so a page refresh doesn't re-show it.
+  useEffect(() => {
+    if (callbackError) {
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("error");
+      window.history.replaceState(null, "", clean.toString());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -85,25 +95,23 @@ function LoginForm() {
         </p>
       </div>
 
-      {/* Google OAuth — use a real navigation (/auth/google) so iPad/Safari WebKit does not block post-async redirects */}
+      {/* Google OAuth — plain <a> forces a raw browser GET so Safari/iPad does
+          not block the redirect through Next.js's async client-side router. */}
       <Button
         asChild
         variant="outline"
         size="lg"
         className="w-full gap-2 border-border bg-white hover:bg-gray-50 text-foreground"
       >
-        <Link
+        <a
           href={googleHref}
           aria-disabled={loading}
           className={loading ? "pointer-events-none opacity-50" : undefined}
-          onClick={(e) => {
-            if (loading) e.preventDefault();
-            else setError(null);
-          }}
+          onClick={() => setError(null)}
         >
           <GoogleIcon />
           Continue with Google
-        </Link>
+        </a>
       </Button>
 
       {/* Divider */}
