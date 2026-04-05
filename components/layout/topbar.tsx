@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, Sun, Moon, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/layout/notification-bell";
-import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/components/providers/theme-provider";
 import {
   DropdownMenu,
@@ -55,9 +54,8 @@ export default function Topbar({ onMenuClick, displayName }: TopbarProps) {
     )?.[1] ?? "Budget Partner HQ";
 
   async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
+    await fetch("/api/auth/signout", { method: "POST" });
+    window.location.href = "/login";
   }
 
   const initials = getInitials(displayName);

@@ -23,7 +23,16 @@ import { SUPPORTED_CURRENCY_CODES } from "@/lib/currencies";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 const TIMEZONES = ["Asia/Manila", "America/New_York", "Europe/London", "Asia/Singapore", "Australia/Sydney", "Asia/Tokyo"];
 
-function ProfileSection({ profile, onSave }: { profile: Profile; onSave: (updated: Partial<Profile>) => Promise<void> }) {
+function ProfileSection({
+  profile,
+  email,
+  onSave,
+}: {
+  profile: Profile;
+  /** From auth — shown read-only; changing email is not supported in-app. */
+  email: string | null;
+  onSave: (updated: Partial<Profile>) => Promise<void>;
+}) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? "");
   const [baseCurrency, setBaseCurrency] = useState(profile.base_currency);
   const [timezone, setTimezone] = useState(profile.timezone);
@@ -44,6 +53,22 @@ function ProfileSection({ profile, onSave }: { profile: Profile; onSave: (update
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="profile-email">Email</Label>
+        <Input
+          id="profile-email"
+          type="email"
+          autoComplete="email"
+          value={email ?? ""}
+          readOnly
+          aria-readonly="true"
+          className="cursor-default border-input/80 bg-muted/40 text-foreground selection:bg-muted"
+        />
+        <p className="text-xs text-muted-foreground">
+          This is your sign-in address. It can&apos;t be edited here.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="display-name">Display name</Label>
         <Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Your name" />
@@ -384,6 +409,7 @@ function PromptSettingsSection({
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   const router = useRouter();
@@ -392,6 +418,7 @@ export default function ProfilePage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setAccountEmail(user.email ?? null);
       const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       setProfile(p);
       setLoading(false);
@@ -478,7 +505,7 @@ export default function ProfilePage() {
               <CardDescription>Manage your display name, base currency, and regional settings.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ProfileSection profile={profile} onSave={saveProfile} />
+              <ProfileSection profile={profile} email={accountEmail} onSave={saveProfile} />
             </CardContent>
           </Card>
         </TabsContent>
