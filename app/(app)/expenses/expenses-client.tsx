@@ -49,7 +49,7 @@ const CURRENCIES = ["PHP", "USD", "EUR", "GBP", "SGD", "AUD", "JPY"];
 const RECURRENCE_RULES = ["daily", "weekly", "monthly"] as const;
 
 // ─── Add Expense Form ─────────────────────────────────────────────────────────
-function ExpenseForm({
+export function ExpenseForm({
   categories,
   merchants,
   accounts,

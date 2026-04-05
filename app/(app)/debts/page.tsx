@@ -72,6 +72,30 @@ export default async function DebtsPage() {
       .single(),
   ]);
 
+  // Compute outstanding balance per credit card from transactions (same logic as credit-cards page)
+  const cardIds = (creditCards ?? []).map((c) => c.id);
+  let cardBalanceMap: Record<string, number> = {};
+  if (cardIds.length > 0) {
+    const { data: txData } = await supabase
+      .from("transactions")
+      .select("credit_card_id, type, amount")
+      .eq("user_id", user!.id)
+      .in("credit_card_id", cardIds)
+      .in("type", ["credit_charge", "credit_payment"]);
+
+    (txData ?? []).forEach((tx) => {
+      const id = tx.credit_card_id!;
+      if (!cardBalanceMap[id]) cardBalanceMap[id] = 0;
+      if (tx.type === "credit_charge") cardBalanceMap[id] += tx.amount;
+      else if (tx.type === "credit_payment") cardBalanceMap[id] -= tx.amount;
+    });
+  }
+
+  const cardsWithBalance = (creditCards ?? []).map((card) => ({
+    ...card,
+    outstanding_balance: Math.max(0, cardBalanceMap[card.id] ?? 0),
+  }));
+
   const avgMonthlyIncome =
     (healthSnapshot?.avg_monthly_salary ?? 0) +
     (healthSnapshot?.avg_monthly_freelance ?? 0);
@@ -80,7 +104,7 @@ export default async function DebtsPage() {
     <DebtsPageClient
       initialDebts={debts ?? []}
       debtPayments={debtPayments ?? []}
-      creditCards={creditCards ?? []}
+      creditCards={cardsWithBalance}
       instalmentPlans={instalmentPlans ?? []}
       debtStrategy={debtStrategy ?? null}
       accounts={accounts ?? []}

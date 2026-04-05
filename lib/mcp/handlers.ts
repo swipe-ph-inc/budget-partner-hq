@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { format, addDays, startOfMonth } from "date-fns";
+import { format, addDays } from "date-fns";
 import { firstDayOfMonth } from "@/lib/utils";
+import { approveMonthlyAllocation } from "@/lib/allocation/approve-allocation";
 
 type HandlerResult = Record<string, unknown> | unknown[];
 
@@ -316,27 +317,13 @@ export async function handleMCPTool(
         adjustments?: Array<{ item_id: string; new_amount: number }>;
       };
 
-      if (adjustments && adjustments.length > 0) {
-        for (const adj of adjustments) {
-          // Scope update to this allocation so items from other allocations cannot be mutated
-          await supabase
-            .from("allocation_items")
-            .update({ amount: adj.new_amount })
-            .eq("id", adj.item_id)
-            .eq("allocation_id", allocation_id);
-        }
-      }
+      const result = await approveMonthlyAllocation(supabase, userId, {
+        allocationId: allocation_id,
+        adjustments,
+      });
 
-      const { data, error } = await supabase
-        .from("monthly_allocations")
-        .update({ status: "approved", approved_at: new Date().toISOString() })
-        .eq("id", allocation_id)
-        .eq("user_id", userId)
-        .select()
-        .single();
-
-      if (error) return { error: error.message };
-      return { success: true, allocation: data };
+      if (!result.success) return { error: result.error };
+      return { success: true, allocation: result.allocation };
     }
 
     case "get_safe_to_spend": {

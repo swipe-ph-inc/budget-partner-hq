@@ -10,10 +10,13 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 
 type NotificationType =
   | "subscription_due"
+  | "subscription_upcoming"
   | "subscription_logged"
   | "credit_card_due"
   | "credit_card_overdue"
   | "budget_overspent"
+  | "budget_low"
+  | "budget_low_weekly"
   | "savings_milestone"
   | "low_buffer"
   | "high_credit_utilisation"
@@ -33,10 +36,13 @@ interface Notification {
 
 const TYPE_ICON: Record<NotificationType, React.ReactNode> = {
   subscription_due:        <RefreshCcw className="h-4 w-4" />,
+  subscription_upcoming:   <RefreshCcw className="h-4 w-4" />,
   subscription_logged:     <RefreshCcw className="h-4 w-4" />,
   credit_card_due:         <CreditCard className="h-4 w-4" />,
   credit_card_overdue:     <CreditCard className="h-4 w-4" />,
   budget_overspent:        <Wallet className="h-4 w-4" />,
+  budget_low:              <Wallet className="h-4 w-4" />,
+  budget_low_weekly:       <Wallet className="h-4 w-4" />,
   savings_milestone:       <PiggyBank className="h-4 w-4" />,
   low_buffer:              <TrendingDown className="h-4 w-4" />,
   high_credit_utilisation: <AlertTriangle className="h-4 w-4" />,
@@ -47,10 +53,13 @@ const TYPE_ICON: Record<NotificationType, React.ReactNode> = {
 
 const TYPE_COLOUR: Record<NotificationType, string> = {
   subscription_due:        "bg-warning/10 text-warning-700",
+  subscription_upcoming:   "bg-primary/10 text-primary",
   subscription_logged:     "bg-success/10 text-success-600",
   credit_card_due:         "bg-warning/10 text-warning-700",
   credit_card_overdue:     "bg-destructive/10 text-destructive",
   budget_overspent:        "bg-destructive/10 text-destructive",
+  budget_low:              "bg-warning/10 text-warning-700",
+  budget_low_weekly:       "bg-warning/10 text-warning-700",
   savings_milestone:       "bg-success/10 text-success-600",
   low_buffer:              "bg-warning/10 text-warning-700",
   high_credit_utilisation: "bg-destructive/10 text-destructive",

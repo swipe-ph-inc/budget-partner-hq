@@ -35,15 +35,28 @@ export async function generateNotificationsForUser(
   const monthStart = `${monthKey}-01`;
 
   // ── Fetch all data in parallel ─────────────────────────────────────────────
+  const sevenDaysOut = new Date(today);
+  sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
+  const sevenDaysOutStr = sevenDaysOut.toISOString().slice(0, 10);
+  const tomorrowStr = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
+
+  // Monday of the current week
+  const weekStart = new Date(today);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  const weekKey = weekStartStr; // dedup key for weekly notifications
+
   const [
     { data: profileRow },
     { data: subs },
+    { data: subsUpcoming },
     { data: cards },
     { data: categories },
     { data: monthlyTxs },
     { data: allCardTxs },
     { data: savingsPlans },
     { data: snapshot },
+    { data: weeklyTxs },
   ] = await Promise.all([
     supabase.from("profiles").select("base_currency").eq("id", userId).single(),
     supabase
@@ -52,6 +65,14 @@ export async function generateNotificationsForUser(
       .eq("user_id", userId)
       .eq("status", "active")
       .lte("next_billing_date", todayStr),
+
+    supabase
+      .from("subscriptions")
+      .select("id, name, amount, currency_code, next_billing_date")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .gte("next_billing_date", tomorrowStr)
+      .lte("next_billing_date", sevenDaysOutStr),
 
     supabase
       .from("credit_cards")
@@ -93,6 +114,13 @@ export async function generateNotificationsForUser(
       .order("snapshot_date", { ascending: false })
       .limit(1)
       .single(),
+
+    supabase
+      .from("transactions")
+      .select("amount, fee_amount, type, category_id")
+      .eq("user_id", userId)
+      .gte("date", weekStartStr)
+      .lte("date", todayStr),
   ]);
 
   const displayCurrency = profileRow?.base_currency ?? "PHP";
@@ -121,6 +149,21 @@ export async function generateNotificationsForUser(
         : formatCurrency(sub.amount, displayCurrency),
       link: "/subscriptions",
       deduplication_key: `subscription_due:${sub.id}:${todayStr}`,
+    });
+  }
+
+  // ── 1b. Subscriptions due in 1–7 days ────────────────────────────────────
+  for (const sub of subsUpcoming ?? []) {
+    const dueDate = new Date(sub.next_billing_date + "T00:00:00");
+    const daysUntil = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+    notifications.push({
+      user_id: userId,
+      type: "subscription_upcoming",
+      title: `${sub.name} due in ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`,
+      body: formatCurrency(sub.amount, displayCurrency),
+      link: "/subscriptions",
+      // dedup per billing date — fires once no matter how many days before it's generated
+      deduplication_key: `subscription_upcoming:${sub.id}:${sub.next_billing_date}`,
     });
   }
 
@@ -177,6 +220,49 @@ export async function generateNotificationsForUser(
         body: `Over by ${formatCurrency(overage, displayCurrency)} this month`,
         link: "/categories",
         deduplication_key: `budget_overspent:${cat.id}:${monthKey}`,
+      });
+    }
+  }
+
+  // ── 3b. Monthly budget running low (≥ 80 % spent, not yet exceeded) ─────
+  for (const cat of categories ?? []) {
+    if (!cat.budget_amount) continue;
+    const spent = spendByCategory[cat.id] ?? 0;
+    const pct = spent / cat.budget_amount;
+    if (pct >= 0.8 && pct < 1) {
+      notifications.push({
+        user_id: userId,
+        type: "budget_low",
+        title: `${cat.name} budget is running low`,
+        body: `${Math.round(pct * 100)}% used — ${formatCurrency(cat.budget_amount - spent, displayCurrency)} remaining this month`,
+        link: "/categories",
+        deduplication_key: `budget_low:${cat.id}:${monthKey}`,
+      });
+    }
+  }
+
+  // ── 3c. Weekly budget running low (≥ 80 % of weekly slice spent) ─────────
+  const WEEKS_PER_MONTH = 4.345;
+  const weeklySpendByCategory: Record<string, number> = {};
+  for (const tx of weeklyTxs ?? []) {
+    if (!["expense", "credit_charge"].includes(tx.type) || !tx.category_id) continue;
+    weeklySpendByCategory[tx.category_id] =
+      (weeklySpendByCategory[tx.category_id] ?? 0) + tx.amount + (tx.fee_amount ?? 0);
+  }
+
+  for (const cat of categories ?? []) {
+    if (!cat.budget_amount) continue;
+    const weeklySlice = cat.budget_amount / WEEKS_PER_MONTH;
+    const weeklySpent = weeklySpendByCategory[cat.id] ?? 0;
+    const pct = weeklySpent / weeklySlice;
+    if (pct >= 0.8) {
+      notifications.push({
+        user_id: userId,
+        type: "budget_low_weekly",
+        title: `${cat.name} weekly budget is running low`,
+        body: `${Math.round(pct * 100)}% of this week's slice used — ${formatCurrency(Math.max(0, weeklySlice - weeklySpent), displayCurrency)} left`,
+        link: "/categories",
+        deduplication_key: `budget_low_weekly:${cat.id}:${weekKey}`,
       });
     }
   }

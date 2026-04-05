@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -23,6 +23,7 @@ import {
   CalendarDays,
   Lock,
   Gem,
+  PieChart,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -55,8 +56,9 @@ const navItems = [
   {
     group: "Planning",
     items: [
+      { href: "/allocation", label: "Allocation", icon: PieChart },
       { href: "/savings", label: "Savings Goals", icon: PiggyBank },
-      { href: "/subscriptions", label: "Subscriptions", icon: RefreshCcw },
+      { href: "/subscriptions", label: "Subscriptions/Recurring Payments", icon: RefreshCcw },
       { href: "/debts", label: "Debts", icon: TrendingUp },
     ],
   },

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Bot, X, Send, Loader2, ChevronDown, Sparkles, Lock, WifiOff } from "lucide-react";
+import { Bot, X, Send, Loader2, ChevronDown, Sparkles, Lock, WifiOff, RotateCcw, PencilLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getOfflineAssistantReply, isLikelyNetworkError } from "@/lib/ai/offline-assistant";
@@ -14,6 +14,8 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   toolActivity?: Array<{ tool: string; done: boolean }>;
+  /** Set when the assistant reply failed (provider/network); enables retry / restore to input */
+  isError?: boolean;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -55,6 +57,157 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
     }
   }, [open]);
 
+  const lastErrorAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.isError) return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  const sendChatWithMessages = useCallback(
+    async (
+      apiMessages: Array<{ role: string; content: string }>,
+      assistantMsg: Message,
+      userPromptForOffline: string
+    ) => {
+      const deliverOfflineReply = async () => {
+        await new Promise((r) => setTimeout(r, 120));
+        const text = getOfflineAssistantReply(userPromptForOffline);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: text } : m))
+        );
+      };
+
+      if (aiEnabled && !online) {
+        await deliverOfflineReply();
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: apiMessages }),
+        });
+
+        if (!res.ok) {
+          const raw = await res.text();
+          let detail = `Request failed (${res.status})`;
+          try {
+            const errBody = JSON.parse(raw) as { error?: string };
+            if (typeof errBody.error === "string" && errBody.error.trim()) {
+              detail = errBody.error.trim();
+            }
+          } catch {
+            if (raw.trim()) detail = raw.trim();
+          }
+          throw new Error(detail);
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No response body");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        sseRead: while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") break sseRead;
+
+            try {
+              const event = JSON.parse(payload) as {
+                type: string;
+                text?: string;
+                message?: string;
+                tool?: string;
+                tool_id?: string;
+              };
+
+              if (event.type === "error") {
+                const errText =
+                  typeof event.message === "string" && event.message.trim()
+                    ? event.message.trim()
+                    : "Something went wrong.";
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsg.id
+                      ? { ...m, content: errText, isError: true, toolActivity: [] }
+                      : m
+                  )
+                );
+                break sseRead;
+              }
+
+              if (event.type === "text" && event.text) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsg.id
+                      ? { ...m, content: m.content + event.text! }
+                      : m
+                  )
+                );
+              } else if (event.type === "tool_start" && event.tool) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsg.id
+                      ? {
+                          ...m,
+                          toolActivity: [
+                            ...(m.toolActivity ?? []),
+                            { tool: event.tool!, done: false },
+                          ],
+                        }
+                      : m
+                  )
+                );
+              } else if (event.type === "tool_end" && event.tool) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsg.id
+                      ? {
+                          ...m,
+                          toolActivity: (m.toolActivity ?? []).map((ta) =>
+                            ta.tool === event.tool ? { ...ta, done: true } : ta
+                          ),
+                        }
+                      : m
+                  )
+                );
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      } catch (err) {
+        if (aiEnabled && isLikelyNetworkError(err)) {
+          await deliverOfflineReply();
+          return;
+        }
+        const fallback = "Sorry, I encountered an error. Please try again.";
+        const message = err instanceof Error && err.message.trim() ? err.message.trim() : fallback;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsg.id
+              ? { ...m, content: message, isError: true, toolActivity: [] }
+              : m
+          )
+        );
+      }
+    },
+    [aiEnabled, online]
+  );
+
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
 
@@ -80,148 +233,74 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
       content: m.content,
     }));
 
-    const deliverOfflineReply = async () => {
-      await new Promise((r) => setTimeout(r, 120));
-      const text = getOfflineAssistantReply(userMsg.content);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsg.id ? { ...m, content: text } : m
-        )
-      );
-    };
-
-    if (aiEnabled && !online) {
-      try {
-        await deliverOfflineReply();
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
     try {
-      const res = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages }),
-      });
-
-      if (!res.ok) {
-        const raw = await res.text();
-        let detail = `Request failed (${res.status})`;
-        try {
-          const errBody = JSON.parse(raw) as { error?: string };
-          if (typeof errBody.error === "string" && errBody.error.trim()) {
-            detail = errBody.error.trim();
-          }
-        } catch {
-          if (raw.trim()) detail = raw.trim();
-        }
-        throw new Error(detail);
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      sseRead: while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6).trim();
-          if (payload === "[DONE]") break sseRead;
-
-          try {
-            const event = JSON.parse(payload) as {
-              type: string;
-              text?: string;
-              message?: string;
-              tool?: string;
-              tool_id?: string;
-            };
-
-            if (event.type === "error") {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsg.id
-                    ? {
-                        ...m,
-                        content:
-                          typeof event.message === "string" && event.message.trim()
-                            ? event.message.trim()
-                            : "Something went wrong.",
-                      }
-                    : m
-                )
-              );
-              break sseRead;
-            }
-
-            if (event.type === "text" && event.text) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsg.id
-                    ? { ...m, content: m.content + event.text! }
-                    : m
-                )
-              );
-            } else if (event.type === "tool_start" && event.tool) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsg.id
-                    ? {
-                        ...m,
-                        toolActivity: [
-                          ...(m.toolActivity ?? []),
-                          { tool: event.tool!, done: false },
-                        ],
-                      }
-                    : m
-                )
-              );
-            } else if (event.type === "tool_end" && event.tool) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsg.id
-                    ? {
-                        ...m,
-                        toolActivity: (m.toolActivity ?? []).map((ta) =>
-                          ta.tool === event.tool ? { ...ta, done: true } : ta
-                        ),
-                      }
-                    : m
-                )
-              );
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        }
-      }
-    } catch (err) {
-      if (aiEnabled && isLikelyNetworkError(err)) {
-        await deliverOfflineReply();
-        return;
-      }
-      const fallback = "Sorry, I encountered an error. Please try again.";
-      const message = err instanceof Error && err.message.trim() ? err.message.trim() : fallback;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsg.id ? { ...m, content: message } : m
-        )
-      );
+      await sendChatWithMessages(apiMessages, assistantMsg, userMsg.content);
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, online, aiEnabled]);
+  }, [input, loading, messages, sendChatWithMessages]);
+
+  const retryLastFailed = useCallback(async () => {
+    if (loading) return;
+
+    const holder: {
+      payload: {
+        apiMessages: Array<{ role: string; content: string }>;
+        newAssistant: Message;
+        userPrompt: string;
+      } | null;
+    } = { payload: null };
+
+    setMessages((current) => {
+      const errorIdx = current.findLastIndex((m) => m.role === "assistant" && m.isError);
+      if (errorIdx < 1) return current;
+      const prevUser = current[errorIdx - 1];
+      if (prevUser.role !== "user") return current;
+
+      const newAssistant: Message = {
+        id: `${Date.now()}-retry`,
+        role: "assistant",
+        content: "",
+        toolActivity: [],
+      };
+
+      holder.payload = {
+        apiMessages: current.slice(0, errorIdx).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+        newAssistant,
+        userPrompt: prevUser.content,
+      };
+      return [...current.slice(0, errorIdx), newAssistant];
+    });
+
+    const { payload } = holder;
+    if (!payload) return;
+
+    setLoading(true);
+    try {
+      await sendChatWithMessages(payload.apiMessages, payload.newAssistant, payload.userPrompt);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, sendChatWithMessages]);
+
+  const restoreFailedPromptToInput = useCallback(() => {
+    let text: string | null = null;
+    setMessages((current) => {
+      const errorIdx = current.findLastIndex((m) => m.role === "assistant" && m.isError);
+      if (errorIdx < 1) return current;
+      const prevUser = current[errorIdx - 1];
+      if (prevUser.role !== "user") return current;
+      text = prevUser.content;
+      return current.filter((_, i) => i !== errorIdx);
+    });
+    if (text !== null) {
+      setInput(text);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, []);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -379,7 +458,9 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
                           "rounded-xl px-3.5 py-2.5 text-sm leading-relaxed",
                           msg.role === "user"
                             ? "bg-primary text-white"
-                            : "bg-secondary text-foreground"
+                            : msg.isError
+                              ? "bg-destructive/10 text-foreground border border-destructive/25"
+                              : "bg-secondary text-foreground"
                         )}
                       >
                         {msg.role === "user" ? (
@@ -404,6 +485,37 @@ export function AIChatButton({ aiEnabled }: { aiEnabled: boolean }) {
                         ) : null}
                       </div>
                     )}
+
+                    {msg.role === "assistant" &&
+                      msg.isError &&
+                      msg.id === lastErrorAssistantId && (
+                        <div className="flex flex-wrap gap-2 pt-0.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5 text-xs"
+                            disabled={loading}
+                            onClick={() => void retryLastFailed()}
+                            aria-label="Retry the same request"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                            Retry
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1.5 text-xs"
+                            disabled={loading}
+                            onClick={restoreFailedPromptToInput}
+                            aria-label="Put your message back in the input field to edit or resend"
+                          >
+                            <PencilLine className="h-3.5 w-3.5" aria-hidden />
+                            Edit in input
+                          </Button>
+                        </div>
+                      )}
                   </div>
                 </div>
               ))}
