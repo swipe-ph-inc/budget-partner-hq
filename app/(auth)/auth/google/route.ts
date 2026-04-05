@@ -54,6 +54,11 @@ export async function GET(request: Request) {
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      // Google otherwise reuses the browser’s active Google session and skips the picker.
+      // https://developers.google.com/identity/protocols/oauth2/openid-connect#authenticationuriparameters
+      queryParams: {
+        prompt: "select_account",
+      },
     },
   });
 

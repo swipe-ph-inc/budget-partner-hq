@@ -17,16 +17,13 @@ import {
   Tag,
   ChevronLeft,
   ChevronRight,
-  User,
   TrendingUp,
-  LogOut,
   CalendarDays,
   Lock,
   Gem,
   PieChart,
+  X,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 /** Routes that require Pro (free users see a lock in the sidebar; pages show an upgrade prompt). */
 const PRO_ONLY_HREFS = new Set([
@@ -94,36 +91,43 @@ export default function Sidebar({
   isPro,
 }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+
+  /** On mobile drawer, always show full labels (ignore desktop collapse). */
+  const showExpanded = !collapsed || mobileOpen;
 
   function closeMobileIfNeeded() {
     onMobileClose?.();
   }
 
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
-
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-white/5 transition-all duration-300 ease-in-out",
+        "fixed left-0 top-0 z-50 flex h-[100dvh] max-h-[100dvh] flex-col border-r border-white/5 transition-transform duration-300 ease-in-out",
         "bg-primary shadow-sidebar",
-        "w-[min(18rem,calc(100vw-2rem))]",
+        "w-[min(20rem,calc(100vw-1rem))]",
         collapsed ? "md:w-16" : "md:w-60",
         "-translate-x-full md:translate-x-0",
-        mobileOpen && "translate-x-0"
+        mobileOpen && "translate-x-0",
+        "pt-[env(safe-area-inset-top)]"
       )}
     >
-      {/* Logo — centered; collapse control sits top-right */}
-      <div className="relative h-16 shrink-0 border-b border-white/10">
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      {/* Logo — centered; mobile close (left); desktop collapse (right) */}
+      <div className="relative flex h-16 shrink-0 items-center border-b border-white/10">
+        {mobileOpen && (
+          <button
+            type="button"
+            onClick={closeMobileIfNeeded}
+            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-md p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white md:hidden"
+            aria-label="Close navigation menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+        <div className="flex flex-1 items-center justify-center px-12 md:px-10">
           <Link
             href="/dashboard"
             onClick={closeMobileIfNeeded}
-            className="pointer-events-auto flex items-center justify-center"
+            className="flex items-center justify-center"
           >
             <Image
               src="/bp_logo.png"
@@ -133,7 +137,7 @@ export default function Sidebar({
               priority
               className={cn(
                 "object-contain object-center",
-                collapsed ? "h-9 w-9" : "h-10 w-auto max-w-[9.5rem]"
+                showExpanded ? "h-10 w-auto max-w-[9.5rem]" : "h-9 w-9"
               )}
             />
           </Link>
@@ -153,12 +157,12 @@ export default function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className="no-scrollbar flex-1 overflow-y-auto py-4 px-2 space-y-6">
+      <nav className="no-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-2 py-4">
         {navItems.map((group) => (
           <div key={group.group}>
-            {!collapsed && (
-              <div className="px-2 mb-1">
-                <span className="text-xs font-semibold text-white/30 uppercase tracking-widest">
+            {showExpanded && (
+              <div className="mb-1 px-2">
+                <span className="text-xs font-semibold uppercase tracking-widest text-white/30">
                   {group.group}
                 </span>
               </div>
@@ -175,20 +179,20 @@ export default function Sidebar({
                       href={item.href}
                       onClick={closeMobileIfNeeded}
                       className={cn(
-                        "sidebar-link",
+                        "sidebar-link min-h-11 touch-manipulation md:min-h-0",
                         isActive && "active",
-                        collapsed && "justify-center px-2",
+                        !showExpanded && "justify-center px-2",
                         !isPro && proOnly && "opacity-80"
                       )}
-                      title={collapsed ? item.label : undefined}
+                      title={!showExpanded ? item.label : undefined}
                     >
                       <item.icon
                         className={cn(
                           "shrink-0",
-                          collapsed ? "h-5 w-5" : "h-4 w-4"
+                          showExpanded ? "h-4 w-4" : "h-5 w-5"
                         )}
                       />
-                      {!collapsed && (
+                      {showExpanded && (
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
                           <span className="truncate">{item.label}</span>
                           {!isPro && proOnly && (
@@ -199,7 +203,7 @@ export default function Sidebar({
                           )}
                         </span>
                       )}
-                      {collapsed && !isPro && proOnly && (
+                      {!showExpanded && !isPro && proOnly && (
                         <span className="sr-only">Pro feature</span>
                       )}
                     </Link>
@@ -211,34 +215,6 @@ export default function Sidebar({
         ))}
       </nav>
 
-      {/* Bottom actions */}
-      <div className="border-t border-white/10 p-2 space-y-0.5">
-        <Link
-          href="/profile"
-          onClick={closeMobileIfNeeded}
-          className={cn(
-            "sidebar-link",
-            pathname.startsWith("/profile") && "active",
-            collapsed && "justify-center px-2"
-          )}
-          title={collapsed ? "Profile" : undefined}
-        >
-          <User className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-4 w-4")} />
-          {!collapsed && <span>Profile</span>}
-        </Link>
-
-        <button
-          onClick={handleSignOut}
-          className={cn(
-            "sidebar-link w-full text-left",
-            collapsed && "justify-center px-2"
-          )}
-          title={collapsed ? "Sign Out" : undefined}
-        >
-          <LogOut className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-4 w-4")} />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
-      </div>
     </aside>
   );
 }
