@@ -85,12 +85,12 @@ function LoginForm() {
   const googleHref = `/auth/google?next=${encodeURIComponent(afterLogin)}`;
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div>
-        <h1 className="font-display text-3xl font-bold text-foreground">
+    <div className="space-y-6 animate-fade-in sm:space-y-8">
+      <div className="text-balance">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           Welcome back
         </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
+        <p className="mt-2 text-sm text-muted-foreground sm:text-[0.9375rem]">
           Sign in to your Budget Partner HQ account
         </p>
       </div>
@@ -101,7 +101,7 @@ function LoginForm() {
         asChild
         variant="outline"
         size="lg"
-        className="w-full gap-2 border-border bg-white hover:bg-gray-50 text-foreground"
+        className="w-full min-h-11 gap-2 touch-manipulation border-border bg-white text-foreground hover:bg-gray-50 sm:min-h-10"
       >
         <a
           href={googleHref}
@@ -124,7 +124,10 @@ function LoginForm() {
         </div>
       </div>
 
-      <form onSubmit={handleLogin} className="space-y-5">
+      <form
+        onSubmit={handleLogin}
+        className="space-y-5 [&_input]:min-h-11 [&_input]:text-base sm:[&_input]:min-h-9 sm:[&_input]:text-sm"
+      >
         <div className="space-y-2">
           <Label htmlFor="email">Email address</Label>
           <Input
@@ -139,11 +142,13 @@ function LoginForm() {
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <Label htmlFor="password" className="mb-0">
+              Password
+            </Label>
             <Link
               href="/forgot-password"
-              className="text-xs text-primary hover:underline"
+              className="shrink-0 text-xs text-primary hover:underline"
             >
               Forgot password?
             </Link>
@@ -160,18 +165,23 @@ function LoginForm() {
         </div>
 
         {error && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-3 text-sm text-destructive break-words sm:px-4">
             {error}
           </div>
         )}
 
-        <Button type="submit" className="w-full" size="lg" disabled={loading}>
+        <Button
+          type="submit"
+          className="w-full min-h-11 touch-manipulation sm:min-h-10"
+          size="lg"
+          disabled={loading}
+        >
           {loading && <Loader2 className="animate-spin" />}
           {loading ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-sm leading-relaxed text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link
           href={
@@ -179,16 +189,18 @@ function LoginForm() {
               ? `/signup?redirect=${encodeURIComponent(redirectParam)}`
               : "/signup"
           }
-          className="text-primary font-medium hover:underline"
+          className="font-medium text-primary hover:underline"
         >
           Create one
         </Link>
       </p>
-      <p className="mt-6 text-center text-xs text-muted-foreground">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-muted-foreground">
         <Link href="/terms" className="hover:text-foreground hover:underline">
           Terms &amp; Conditions
         </Link>
-        <span className="mx-2 opacity-50">·</span>
+        <span className="hidden opacity-50 sm:inline" aria-hidden="true">
+          ·
+        </span>
         <Link href="/refund-policy" className="hover:text-foreground hover:underline">
           Refund Policy
         </Link>
@@ -199,7 +211,11 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
+    <Suspense
+      fallback={
+        <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

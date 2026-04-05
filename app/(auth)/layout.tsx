@@ -10,7 +10,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex">
+    <div className="flex min-h-dvh">
       {/* Left panel — branding */}
       <div className="hidden lg:flex lg:w-1/2 xl:w-2/5 bg-primary flex-col justify-between p-12 relative overflow-hidden">
         {/* Decorative circles */}
@@ -61,9 +61,9 @@ export default function AuthLayout({
         </div>
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex flex-1 flex-col items-center justify-center bg-background p-6 sm:p-8">
-        <div className="mb-8 flex justify-center lg:hidden">
+      {/* Right panel — form (scroll when keyboard / small viewport; safe-area on notched phones) */}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-background px-4 py-6 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 sm:py-8">
+        <div className="mb-6 flex justify-center sm:mb-8 lg:hidden">
           <a
             href={MARKETING_SITE_URL}
             className="inline-block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -79,7 +79,7 @@ export default function AuthLayout({
             />
           </a>
         </div>
-        <div className="w-full max-w-md">{children}</div>
+        <div className="w-full max-w-md min-w-0">{children}</div>
       </div>
     </div>
   );

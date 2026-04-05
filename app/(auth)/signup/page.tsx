@@ -68,18 +68,21 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="space-y-6 text-center animate-fade-in">
+      <div className="space-y-6 px-0.5 text-center animate-fade-in sm:px-0">
         <div className="flex justify-center">
-          <CheckCircle2 className="h-16 w-16 text-success" />
+          <CheckCircle2 className="h-14 w-14 text-success sm:h-16 sm:w-16" />
         </div>
-        <h2 className="font-display text-2xl font-bold text-foreground">
+        <h2 className="font-display text-xl font-bold tracking-tight text-foreground text-balance sm:text-2xl">
           Check your email
         </h2>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          We sent a verification link to <strong>{email}</strong>. Click it to
-          activate your account.
+        <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-[0.9375rem]">
+          We sent a verification link to <strong className="break-all">{email}</strong>.
+          Click it to activate your account.
         </p>
-        <Link href="/login" className="text-primary font-medium hover:underline text-sm">
+        <Link
+          href="/login"
+          className="inline-flex min-h-11 items-center justify-center text-sm font-medium text-primary hover:underline touch-manipulation sm:min-h-0"
+        >
           Back to sign in
         </Link>
       </div>
@@ -87,12 +90,12 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div>
-        <h1 className="font-display text-3xl font-bold text-foreground">
+    <div className="space-y-6 animate-fade-in sm:space-y-8">
+      <div className="text-balance">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           Create your account
         </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
+        <p className="mt-2 text-sm text-muted-foreground sm:text-[0.9375rem]">
           Start managing your finances the smart way
         </p>
       </div>
@@ -102,7 +105,7 @@ export default function SignupPage() {
         asChild
         variant="outline"
         size="lg"
-        className="w-full gap-2 border-border bg-white hover:bg-gray-50 text-foreground"
+        className="w-full min-h-11 gap-2 touch-manipulation border-border bg-white text-foreground hover:bg-gray-50 sm:min-h-10"
       >
         <Link
           href={googleHref}
@@ -128,7 +131,10 @@ export default function SignupPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSignup} className="space-y-5">
+      <form
+        onSubmit={handleSignup}
+        className="space-y-5 [&_input]:min-h-11 [&_input]:text-base sm:[&_input]:min-h-9 sm:[&_input]:text-sm"
+      >
         <div className="space-y-2">
           <Label htmlFor="name">Display name</Label>
           <Input
@@ -170,28 +176,35 @@ export default function SignupPage() {
         </div>
 
         {error && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-3 text-sm break-words text-destructive sm:px-4">
             {error}
           </div>
         )}
 
-        <Button type="submit" className="w-full" size="lg" disabled={loading}>
+        <Button
+          type="submit"
+          className="w-full min-h-11 touch-manipulation sm:min-h-10"
+          size="lg"
+          disabled={loading}
+        >
           {loading && <Loader2 className="animate-spin" />}
           {loading ? "Creating account…" : "Create account"}
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-sm leading-relaxed text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="text-primary font-medium hover:underline">
+        <Link href="/login" className="font-medium text-primary hover:underline">
           Sign in
         </Link>
       </p>
-      <p className="mt-6 text-center text-xs text-muted-foreground">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-muted-foreground">
         <Link href="/terms" className="hover:text-foreground hover:underline">
           Terms &amp; Conditions
         </Link>
-        <span className="mx-2 opacity-50">·</span>
+        <span className="hidden opacity-50 sm:inline" aria-hidden="true">
+          ·
+        </span>
         <Link href="/refund-policy" className="hover:text-foreground hover:underline">
           Refund Policy
         </Link>
