@@ -101,7 +101,7 @@ function LoginForm() {
         asChild
         variant="outline"
         size="lg"
-        className="w-full min-h-11 gap-2 touch-manipulation border-border bg-white text-foreground hover:bg-gray-50 sm:min-h-10"
+        className="w-full min-h-11 gap-2 touch-manipulation border-border bg-white text-foreground hover:bg-gray-50 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-700 sm:min-h-10"
       >
         <a
           href={googleHref}

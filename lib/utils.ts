@@ -6,6 +6,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Case-insensitive alphabetical sort by `name` (returns a new array). */
+export function sortByLocaleName<T extends { name: string }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
+}
+
 // Currency formatting
 export function formatCurrency(
   amount: number,

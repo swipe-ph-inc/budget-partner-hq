@@ -30,11 +30,14 @@ import {
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, sortByLocaleName } from "@/lib/utils";
 import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
+import { SUPPORTED_CURRENCY_CODES } from "@/lib/currencies";
+import { buildSafeReceiptApply } from "@/lib/receipt-autofill";
+import { CreateMerchantInline } from "@/components/merchants/create-merchant-inline";
 
 type Expense = Database["public"]["Tables"]["transactions"]["Row"] & {
   categories: { id: string; name: string; color: string | null } | null;
@@ -93,39 +96,29 @@ export function ExpenseForm({
   }, [merchants, merchantSearch]);
 
   function handleReceiptParsed(parsed: ParsedReceipt, url: string | null) {
-    if (parsed.amount != null) setAmount(String(parsed.amount));
-    if (parsed.date) setDate(parsed.date);
-    if (parsed.currency && CURRENCIES.includes(parsed.currency)) setCurrency(parsed.currency);
-    if (parsed.description) setDescription(parsed.description);
+    const apply = buildSafeReceiptApply(parsed, {
+      merchants,
+      categories,
+      allowedCurrencies: SUPPORTED_CURRENCY_CODES,
+    });
+
+    if (apply.amountStr) setAmount(apply.amountStr);
+    if (apply.date) setDate(apply.date);
+    if (apply.currency) setCurrency(apply.currency);
+    if (apply.description) setDescription(apply.description);
     if (url) setAttachmentUrl(url);
 
-    // Switch payment method if receipt indicates card
-    if (parsed.type === "credit_charge") setPaymentMethod("credit_card");
+    if (apply.txType === "credit_charge") setPaymentMethod("credit_card");
 
-    // Match merchant by name (case-insensitive)
-    if (parsed.merchant) {
-      const match = merchants.find(
-        (m) => m.name.toLowerCase() === parsed.merchant!.toLowerCase()
-      );
-      if (match) {
-        setMerchantId(match.id);
-        setMerchantSearch(match.name);
-      } else {
-        setMerchantSearch(parsed.merchant);
-        setMerchantId("__none__");
-      }
+    if (apply.merchantId) {
+      setMerchantId(apply.merchantId);
+      setMerchantSearch(apply.merchantSearch);
+    } else {
+      setMerchantId("__none__");
+      setMerchantSearch(apply.merchantSearch);
     }
 
-    // Match category by hint
-    if (parsed.category_hint) {
-      const hint = parsed.category_hint.toLowerCase();
-      const match = categories.find(
-        (c) =>
-          c.name.toLowerCase().includes(hint) ||
-          hint.includes(c.name.toLowerCase())
-      );
-      if (match) setCategoryId(match.id);
-    }
+    if (apply.categoryId) setCategoryId(apply.categoryId);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -133,9 +126,8 @@ export function ExpenseForm({
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setError("Not authenticated");
       setLoading(false);
@@ -179,7 +171,10 @@ export function ExpenseForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 [&_input]:min-h-11 [&_input]:text-base sm:[&_input]:min-h-9 sm:[&_input]:text-sm"
+    >
       {/* Receipt scanner */}
       <ReceiptScanner onParsed={handleReceiptParsed} />
 
@@ -283,6 +278,17 @@ export function ExpenseForm({
             ))}
           </div>
         )}
+        <CreateMerchantInline
+          merchantSearch={merchantSearch}
+          merchantId={merchantId}
+          categoryId={categoryId}
+          merchants={merchants}
+          categories={categories}
+          onCreated={(m) => {
+            setMerchantId(m.id);
+            setMerchantSearch(m.name);
+          }}
+        />
       </div>
 
       {/* Payment method toggle */}
@@ -293,7 +299,7 @@ export function ExpenseForm({
             type="button"
             onClick={() => setPaymentMethod("account")}
             className={cn(
-              "flex-1 py-2 rounded-lg border text-sm font-medium transition-all",
+              "flex-1 min-h-11 py-2 rounded-lg border text-sm font-medium transition-all touch-manipulation sm:min-h-9",
               paymentMethod === "account"
                 ? "border-primary bg-primary/5 text-primary"
                 : "border-border hover:bg-secondary"
@@ -305,7 +311,7 @@ export function ExpenseForm({
             type="button"
             onClick={() => setPaymentMethod("credit_card")}
             className={cn(
-              "flex-1 py-2 rounded-lg border text-sm font-medium transition-all",
+              "flex-1 min-h-11 py-2 rounded-lg border text-sm font-medium transition-all touch-manipulation sm:min-h-9",
               paymentMethod === "credit_card"
                 ? "border-primary bg-primary/5 text-primary"
                 : "border-border hover:bg-secondary"
@@ -439,12 +445,21 @@ export function ExpenseForm({
         </div>
       )}
 
-      <div className="flex gap-2 pt-2">
-        <Button type="submit" disabled={loading} className="flex-1">
-          {loading ? "Saving…" : "Add expense"}
-        </Button>
-        <Button type="button" variant="outline" onClick={onClose}>
+      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose}
+          className="w-full min-h-11 touch-manipulation sm:w-auto sm:min-h-9"
+        >
           Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={loading}
+          className="flex-1 min-h-11 touch-manipulation sm:min-h-9"
+        >
+          {loading ? "Saving…" : "Add expense"}
         </Button>
       </div>
     </form>
@@ -473,6 +488,9 @@ export function ExpensesPageClient({
 }: Props) {
   const displayCurrency = useDisplayCurrency();
   const router = useRouter();
+
+  const categoriesSorted = useMemo(() => sortByLocaleName(categories), [categories]);
+  const merchantsSorted = useMemo(() => sortByLocaleName(merchants), [merchants]);
 
   // Filters
   const [dateFrom, setDateFrom] = useState("");
@@ -585,7 +603,7 @@ export function ExpensesPageClient({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">All categories</SelectItem>
-              {categories.map((c) => (
+              {categoriesSorted.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
                 </SelectItem>
@@ -599,7 +617,7 @@ export function ExpensesPageClient({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">All merchants</SelectItem>
-              {merchants.map((m) => (
+              {merchantsSorted.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.name}
                 </SelectItem>
@@ -785,18 +803,19 @@ export function ExpensesPageClient({
 
       {/* Add Expense Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Add expense</SheetTitle>
-            <SheetDescription>
-              Log a new expense with category, merchant, and payment method.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-6">
+        <SheetContent className="flex flex-col overflow-hidden p-0">
+          {/* Scrollable area with safe-area bottom padding */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <SheetHeader>
+              <SheetTitle>Add expense</SheetTitle>
+              <SheetDescription>
+                Log a new expense with category, merchant, and payment method.
+              </SheetDescription>
+            </SheetHeader>
             <ExpenseForm
               key={sheetOpen ? "open" : "closed"}
-              categories={categories}
-              merchants={merchants}
+              categories={categoriesSorted}
+              merchants={merchantsSorted}
               accounts={accounts}
               creditCards={creditCards}
               onSuccess={() => setSheetOpen(false)}

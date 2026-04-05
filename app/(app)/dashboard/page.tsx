@@ -72,7 +72,11 @@ export default async function DashboardPage() {
       .lte("due_date", thirtyDaysOut)
       .eq("is_paid", false)
       .order("due_date"),
-    supabase.from("categories").select("id, name, color, budget_amount").eq("user_id", user.id),
+    supabase
+      .from("categories")
+      .select("id, name, color, budget_amount")
+      .eq("user_id", user.id)
+      .order("name"),
     supabase
       .from("transactions")
       .select("amount, fee_amount, type, category_id, merchant_id, income_type, merchants(name)")

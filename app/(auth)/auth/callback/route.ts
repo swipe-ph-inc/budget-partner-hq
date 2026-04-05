@@ -58,10 +58,13 @@ export async function GET(request: Request) {
   // redirect response — otherwise the browser never stores the session and the
   // middleware immediately redirects back to /login.
   for (const { name, value, options } of pending) {
+    // Do NOT force httpOnly — session tokens must be JS-readable so that
+    // createBrowserClient can find the session on iPad / Safari.
+    // The PKCE code_verifier was already sent in /auth/google and consumed
+    // here; only the access+refresh token cookies remain in `pending`.
     response.cookies.set(name, value, {
       ...(options as Parameters<typeof response.cookies.set>[2]),
       sameSite: "lax",
-      httpOnly: true,
       secure: true,
       path: "/",
     });

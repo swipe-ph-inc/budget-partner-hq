@@ -27,6 +27,7 @@ import {
   formatCurrency,
   formatDate,
   TX_TYPE_LABELS,
+  sortByLocaleName,
 } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -97,6 +98,10 @@ export function AccountDetailClient({
   const displayCurrency = useDisplayCurrency();
   const router = useRouter();
   const supabase = createClient();
+
+  const categoriesSorted = useMemo(() => sortByLocaleName(categories), [categories]);
+  const merchantsSorted = useMemo(() => sortByLocaleName(merchants), [merchants]);
+
   const [transactions, setTransactions] = useState(initialTransactions);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [presetType, setPresetType] = useState<TxType>("expense");
@@ -345,8 +350,8 @@ export function AccountDetailClient({
             <TransactionForm
               key={`${account.id}-${presetType}-${sheetOpen}`}
               accounts={accounts}
-              categories={categories}
-              merchants={merchants}
+              categories={categoriesSorted}
+              merchants={merchantsSorted}
               creditCards={creditCards}
               contextAccountId={account.id}
               defaultCurrency={account.currency_code}

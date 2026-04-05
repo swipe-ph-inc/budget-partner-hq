@@ -538,9 +538,8 @@ function DebtForm({
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setError("Not authenticated");
       setLoading(false);

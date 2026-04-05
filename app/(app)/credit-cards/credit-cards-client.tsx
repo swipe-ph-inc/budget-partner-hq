@@ -133,7 +133,7 @@ function CardTile({
 
   return (
     <div
-      className="relative rounded-xl overflow-hidden shadow-card hover:shadow-card-hover transition-all cursor-pointer group"
+      className="relative rounded-xl overflow-hidden shadow-card hover:shadow-card-hover transition-all cursor-pointer"
       style={{ background: card.color ?? "#032e6d" }}
     >
       {/* Overdue badge */}
@@ -200,13 +200,15 @@ function CardTile({
             View details →
           </Link>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(card);
             }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary"
+            className="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground touch-manipulation"
+            aria-label={`Edit ${card.name}`}
           >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            <Pencil className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -308,9 +310,8 @@ function CardForm({
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setError("Not authenticated");
       setLoading(false);

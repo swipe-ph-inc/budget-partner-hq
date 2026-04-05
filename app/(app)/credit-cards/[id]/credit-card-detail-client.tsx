@@ -260,7 +260,8 @@ function PaymentDialog({
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) { setError("Not authenticated"); setLoading(false); return; }
 
     const { error: txError } = await supabase.from("transactions").insert({

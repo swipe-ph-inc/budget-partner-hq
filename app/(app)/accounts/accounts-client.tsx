@@ -191,7 +191,8 @@ function AccountForm({
     setLoading(true);
     setError(null);
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) { setError("Not authenticated"); setLoading(false); return; }
 
     const payload = { name, type, institution: institution || null, currency_code: currency, color, notes: notes || null };

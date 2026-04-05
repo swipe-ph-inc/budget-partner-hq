@@ -41,7 +41,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { cn, initials, formatCurrency } from "@/lib/utils";
+import { cn, initials, formatCurrency, sortByLocaleName } from "@/lib/utils";
 import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -193,9 +193,13 @@ function CategoryForm({
   const supabase = createClient();
   const router = useRouter();
 
-  // Exclude self and descendants from parent options
-  const parentOptions = categories.filter(
-    (c) => c.id !== category?.id && c.parent_id === null
+  // Exclude self and descendants from parent options (A–Z)
+  const parentOptions = useMemo(
+    () =>
+      sortByLocaleName(
+        categories.filter((c) => c.id !== category?.id && c.parent_id === null)
+      ),
+    [categories, category?.id]
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -203,9 +207,8 @@ function CategoryForm({
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setError("Not authenticated");
       setLoading(false);
@@ -403,14 +406,15 @@ function MerchantForm({
   const supabase = createClient();
   const router = useRouter();
 
+  const categoryOptions = useMemo(() => sortByLocaleName(categories), [categories]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setError("Not authenticated");
       setLoading(false);
@@ -461,7 +465,7 @@ function MerchantForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">No category</SelectItem>
-            {categories.map((c) => (
+            {categoryOptions.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.icon ? `${c.icon} ` : ""}
                 {c.name}
@@ -643,11 +647,15 @@ export function CategoriesPageClient({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Merchant search
+  // Category & merchant search
+  const [categorySearch, setCategorySearch] = useState("");
   const [merchantSearch, setMerchantSearch] = useState("");
 
-  // Build category tree
-  const parentCategories = initialCategories.filter((c) => !c.parent_id);
+  // Build category tree (parents and children sorted A–Z by name)
+  const parentCategories = useMemo(
+    () => sortByLocaleName(initialCategories.filter((c) => !c.parent_id)),
+    [initialCategories]
+  );
   const childrenByParent = useMemo(() => {
     const map: Record<string, Category[]> = {};
     initialCategories.forEach((c) => {
@@ -656,15 +664,46 @@ export function CategoriesPageClient({
         map[c.parent_id].push(c);
       }
     });
+    for (const k of Object.keys(map)) {
+      map[k] = sortByLocaleName(map[k]);
+    }
     return map;
   }, [initialCategories]);
 
-  // Filtered merchants
+  // Filtered merchants (alphabetical)
   const filteredMerchants = useMemo(() => {
-    if (!merchantSearch.trim()) return initialMerchants;
-    const q = merchantSearch.toLowerCase();
-    return initialMerchants.filter((m) => m.name.toLowerCase().includes(q));
+    const base = merchantSearch.trim()
+      ? initialMerchants.filter((m) =>
+          m.name.toLowerCase().includes(merchantSearch.toLowerCase())
+        )
+      : initialMerchants;
+    return sortByLocaleName(base);
   }, [initialMerchants, merchantSearch]);
+
+  /** Parents + children to show — when searching, include parent if it matches or any child matches. */
+  const filteredCategoryTree = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) {
+      return parentCategories.map((parent) => ({
+        parent,
+        children: childrenByParent[parent.id] ?? [],
+      }));
+    }
+    const rows: { parent: Category; children: Category[] }[] = [];
+    for (const parent of parentCategories) {
+      const kids = childrenByParent[parent.id] ?? [];
+      const parentMatches = parent.name.toLowerCase().includes(q);
+      const matchingChildren = kids.filter((c) =>
+        c.name.toLowerCase().includes(q)
+      );
+      if (parentMatches) {
+        rows.push({ parent, children: kids });
+      } else if (matchingChildren.length > 0) {
+        rows.push({ parent, children: matchingChildren });
+      }
+    }
+    return rows;
+  }, [parentCategories, childrenByParent, categorySearch]);
 
   function openNewCategory() {
     setEditingCategory(undefined);
@@ -731,32 +770,50 @@ export function CategoriesPageClient({
     setDeleteLoading(false);
   }
 
-  const CategoriesPanel = (
-    <div className="space-y-1">
-      {parentCategories.length === 0 ? (
-        <div className="text-center py-12 space-y-3">
-          <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mx-auto">
-            <Tag className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <p className="text-sm text-muted-foreground">No categories yet</p>
-          <Button size="sm" onClick={openNewCategory}>
-            <Plus className="h-4 w-4" />
-            Add category
-          </Button>
+  const CategoriesListBody =
+    initialCategories.length === 0 ? (
+      <div className="text-center py-12 space-y-3">
+        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mx-auto">
+          <Tag className="h-6 w-6 text-muted-foreground" />
         </div>
-      ) : (
-        parentCategories.map((cat) => (
+        <p className="text-sm text-muted-foreground">No categories yet</p>
+        <Button size="sm" onClick={openNewCategory}>
+          <Plus className="h-4 w-4" />
+          Add category
+        </Button>
+      </div>
+    ) : filteredCategoryTree.length === 0 ? (
+      <div className="text-center py-12 space-y-3">
+        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mx-auto">
+          <Tag className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          No categories match your search
+        </p>
+      </div>
+    ) : (
+      <div className="space-y-1">
+        {filteredCategoryTree.map(({ parent: cat, children }) => (
           <CategoryNode
             key={cat.id}
             category={cat}
-            children={childrenByParent[cat.id] ?? []}
+            children={children}
             onEdit={openEditCategory}
-            onDelete={(c) =>
-              setDeleteTarget({ type: "category", item: c })
-            }
+            onDelete={(c) => setDeleteTarget({ type: "category", item: c })}
           />
-        ))
-      )}
+        ))}
+      </div>
+    );
+
+  const CategorySearchBar = (
+    <div className="relative shrink-0">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        className="pl-9"
+        placeholder="Search categories…"
+        value={categorySearch}
+        onChange={(e) => setCategorySearch(e.target.value)}
+      />
     </div>
   );
 
@@ -870,8 +927,11 @@ export function CategoriesPageClient({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="categories" className="mt-4 outline-none">
-            <div className="max-h-[min(58vh,480px)] min-h-[12rem] overflow-y-auto overscroll-contain rounded-lg border border-border/70 bg-card p-3">
-              {CategoriesPanel}
+            <div className="flex max-h-[min(58vh,520px)] min-h-[12rem] flex-col gap-3 overflow-hidden">
+              {CategorySearchBar}
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-border/70 bg-card p-3">
+                {CategoriesListBody}
+              </div>
             </div>
           </TabsContent>
           <TabsContent value="merchants" className="mt-4 outline-none">
@@ -902,8 +962,11 @@ export function CategoriesPageClient({
             </Button>
           </div>
           <Separator className="my-4 shrink-0" />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-0.5">
-            {CategoriesPanel}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+            {CategorySearchBar}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-0.5">
+              {CategoriesListBody}
+            </div>
           </div>
         </div>
 

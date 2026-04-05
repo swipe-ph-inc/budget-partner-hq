@@ -35,6 +35,7 @@ import {
   formatDate,
   TX_TYPE_LABELS,
   TX_TYPE_COLORS,
+  sortByLocaleName,
 } from "@/lib/utils";
 import {
   sanitizeMoneyInput,
@@ -47,6 +48,9 @@ import { useRouter } from "next/navigation";
 import type { Database } from "@/types/database";
 import Papa from "papaparse";
 import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
+import { SUPPORTED_CURRENCY_CODES } from "@/lib/currencies";
+import { buildSafeReceiptApply } from "@/lib/receipt-autofill";
+import { CreateMerchantInline } from "@/components/merchants/create-merchant-inline";
 
 type Transaction = Database["public"]["Tables"]["transactions"]["Row"] & {
   accounts: { name: string; currency_code: string } | null;
@@ -199,34 +203,35 @@ export function TransactionForm({
   const showIncomeDepositPicker = type === "income" && !contextAccountId;
 
   function handleReceiptParsed(parsed: ParsedReceipt, url: string | null) {
-    if (parsed.type) setType(parsed.type);
-    if (parsed.amount != null) setAmount(String(parsed.amount));
-    if (parsed.date) setDate(parsed.date);
-    if (parsed.currency && CURRENCIES.includes(parsed.currency)) setCurrency(parsed.currency);
-    if (parsed.description) setDescription(parsed.description);
-    if (parsed.fee_amount != null) setFeeAmount(String(parsed.fee_amount));
+    const apply = buildSafeReceiptApply(parsed, {
+      merchants,
+      categories,
+      allowedCurrencies: SUPPORTED_CURRENCY_CODES,
+    });
+
+    if (apply.txType === "credit_charge") setType("credit_charge");
+    else setType("expense");
+
+    if (apply.amountStr) {
+      setAmount(formatMoneyInputDisplay(sanitizeMoneyInput(apply.amountStr)));
+    }
+    if (apply.date) setDate(apply.date);
+    if (apply.currency) setCurrency(apply.currency);
+    if (apply.description) setDescription(apply.description);
+    if (apply.feeStr) {
+      setFeeAmount(formatMoneyInputDisplay(sanitizeMoneyInput(apply.feeStr)));
+    }
     if (url) setAttachmentUrl(url);
 
-    // Match merchant by name (case-insensitive)
-    if (parsed.merchant) {
-      const match = merchants.find(
-        (m) => m.name.toLowerCase() === parsed.merchant!.toLowerCase()
-      );
-      if (match) {
-        setMerchantId(match.id);
-        setMerchantSearch(match.name);
-      } else {
-        setMerchantSearch(parsed.merchant);
-        setMerchantId("__none__");
-      }
+    if (apply.merchantId) {
+      setMerchantId(apply.merchantId);
+      setMerchantSearch(apply.merchantSearch);
+    } else {
+      setMerchantId("__none__");
+      setMerchantSearch(apply.merchantSearch);
     }
 
-    // Match category by hint (case-insensitive substring)
-    if (parsed.category_hint) {
-      const hint = parsed.category_hint.toLowerCase();
-      const match = categories.find((c) => c.name.toLowerCase().includes(hint) || hint.includes(c.name.toLowerCase()));
-      if (match) setCategoryId(match.id);
-    }
+    if (apply.categoryId) setCategoryId(apply.categoryId);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -234,9 +239,8 @@ export function TransactionForm({
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setError("Not authenticated");
       setLoading(false);
@@ -539,6 +543,17 @@ export function TransactionForm({
             ))}
           </div>
         )}
+        <CreateMerchantInline
+          merchantSearch={merchantSearch}
+          merchantId={merchantId}
+          categoryId={categoryId}
+          merchants={merchants}
+          categories={categories}
+          onCreated={(m) => {
+            setMerchantId(m.id);
+            setMerchantSearch(m.name);
+          }}
+        />
       </div>
 
       {/* Description */}
@@ -620,6 +635,9 @@ export function TransactionsPageClient({
   freeHistoryMinDate,
 }: Props) {
   const router = useRouter();
+
+  const categoriesSorted = useMemo(() => sortByLocaleName(categories), [categories]);
+  const merchantsSorted = useMemo(() => sortByLocaleName(merchants), [merchants]);
 
   // Filters
   const [dateFrom, setDateFrom] = useState("");
@@ -901,8 +919,8 @@ export function TransactionsPageClient({
           <div className="mt-6">
             <TransactionForm
               accounts={accounts}
-              categories={categories}
-              merchants={merchants}
+              categories={categoriesSorted}
+              merchants={merchantsSorted}
               creditCards={creditCards}
               onSuccess={() => setSheetOpen(false)}
               onClose={() => setSheetOpen(false)}

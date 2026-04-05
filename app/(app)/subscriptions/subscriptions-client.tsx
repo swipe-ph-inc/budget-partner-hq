@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Plus,
   AlertTriangle,
@@ -23,7 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, cn, sortByLocaleName } from "@/lib/utils";
 import { useDisplayCurrency } from "@/components/providers/display-currency-provider";
 import {
   sanitizeMoneyInputNonNegative,
@@ -138,9 +138,8 @@ function SubscriptionForm({
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setError("Not authenticated");
       setLoading(false);
@@ -177,14 +176,35 @@ function SubscriptionForm({
       notes: notes || null,
     };
 
-    const { error: dbErr } = subscription
-      ? await supabase.from("subscriptions").update(payload).eq("id", subscription.id)
-      : await supabase.from("subscriptions").insert({ ...payload, user_id: user.id });
+    if (subscription) {
+      // Filter by both id AND user_id so a silent 0-row update (RLS blocked)
+      // is surfaced instead of being mistaken for a success.
+      const { error: dbErr, count } = await supabase
+        .from("subscriptions")
+        .update(payload)
+        .eq("id", subscription.id)
+        .eq("user_id", user.id);
 
-    if (dbErr) {
-      setError(dbErr.message);
-      setLoading(false);
-      return;
+      if (dbErr) {
+        setError(dbErr.message);
+        setLoading(false);
+        return;
+      }
+      if (count === 0) {
+        setError("Update failed — subscription not found or permission denied.");
+        setLoading(false);
+        return;
+      }
+    } else {
+      const { error: dbErr } = await supabase
+        .from("subscriptions")
+        .insert({ ...payload, user_id: user.id });
+
+      if (dbErr) {
+        setError(dbErr.message);
+        setLoading(false);
+        return;
+      }
     }
 
     router.refresh();
@@ -393,9 +413,14 @@ function SubscriptionForm({
         </div>
       )}
 
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? "Saving…" : subscription ? "Update subscription" : "Add subscription"}
-      </Button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row">
+        <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="flex-1">
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading} className="flex-1">
+          {loading ? "Saving…" : subscription ? "Update subscription" : "Add subscription"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -565,6 +590,7 @@ export function SubscriptionsPageClient({
   categories,
 }: Props) {
   const displayCurrency = useDisplayCurrency();
+  const categoriesSorted = useMemo(() => sortByLocaleName(categories), [categories]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | undefined>();
   const [processing, setProcessing] = useState(false);
@@ -767,10 +793,11 @@ export function SubscriptionsPageClient({
           </SheetHeader>
           <div className="mt-6">
             <SubscriptionForm
+              key={editingSub?.id ?? "new"}
               subscription={editingSub}
               creditCards={creditCards}
               accounts={accounts}
-              categories={categories}
+              categories={categoriesSorted}
               onSuccess={() => setSheetOpen(false)}
               onClose={() => setSheetOpen(false)}
             />
