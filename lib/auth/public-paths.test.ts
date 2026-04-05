@@ -11,6 +11,7 @@ describe("isPublicPath", () => {
   it("allows auth flows and webhooks", () => {
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/signup")).toBe(true);
+    expect(isPublicPath("/forgot-password")).toBe(true);
     expect(isPublicPath("/auth/callback")).toBe(true);
     expect(isPublicPath("/auth/google")).toBe(true);
     expect(isPublicPath("/api/paymongo/webhook")).toBe(true);
@@ -32,6 +33,7 @@ describe("isPublicPath", () => {
   it("blocks protected app routes", () => {
     expect(isPublicPath("/dashboard")).toBe(false);
     expect(isPublicPath("/accounts")).toBe(false);
+    expect(isPublicPath("/update-password")).toBe(false);
   });
 });
 
